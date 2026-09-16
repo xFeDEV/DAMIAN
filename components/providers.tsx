@@ -2,13 +2,16 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2 } from 'lucide-react'
+import { ThemeProvider } from 'next-themes'
 import { pb } from '@/lib/pocketbase'
 import type {
   ActivityItem,
   Client,
   DataSnapshot,
   Installment,
+  InstallmentStatus,
   Loan,
+  LoanStatus,
   Operator,
   Payment,
   Settings,
@@ -134,12 +137,16 @@ export interface LoanInput {
   end_at: string
   interest_rate?: number
   notes?: string
+  paid_installments?: number
+  status?: LoanStatus
 }
 
 export interface InstallmentInput {
   number: number
   due_date: string
   amount: number
+  paid?: number
+  status?: InstallmentStatus
 }
 
 export interface PaymentInput {
@@ -256,28 +263,36 @@ function DataProvider({ children }: { children: React.ReactNode }) {
   const createLoan = useCallback(
     async (loan: LoanInput, installments: InstallmentInput[]) => {
       const code = computeNextCode('PR', data.loans.map((item) => item.code))
+      const { paid_installments: paidInstallmentsInput, status: statusInput, ...loanFields } = loan
+      const paidCount = Math.max(0, Math.min(paidInstallmentsInput ?? 0, loan.installments_count))
+      const paidTotal = paidCount * loan.installment_amount
+      const balance = Math.max(0, loan.total - paidTotal)
+      const status: LoanStatus = balance <= 0 ? 'finalizado' : statusInput || 'activo'
       const record = await pb.collection('loans').create<Loan>({
         code,
         opening_balance: loan.total,
-        balance: loan.total,
-        paid_total: 0,
-        status: 'activo',
-        ...loan,
+        balance,
+        paid_total: paidTotal,
+        status,
+        ...loanFields,
       })
 
       if (installments.length > 0) {
+        const today = Date.now()
         await Promise.all(
-          installments.map((item) =>
-            pb.collection('installments').create({
+          installments.map((item) => {
+            const done = item.number <= paidCount
+            const overdue = !done && new Date(item.due_date.replace(' ', 'T')).getTime() < today
+            return pb.collection('installments').create({
               loan: record.id,
               client: record.client,
               number: item.number,
               due_date: item.due_date,
               amount: item.amount,
-              paid: 0,
-              status: 'pendiente',
-            }),
-          ),
+              paid: done ? item.amount : 0,
+              status: item.status ?? (done ? 'pagada' : overdue ? 'vencida' : 'pendiente'),
+            })
+          }),
         )
       }
 
@@ -367,10 +382,12 @@ function computeNextCode(prefix: 'CL' | 'PR', codes: string[]) {
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <AuthProvider>
-      <ToastProvider>
-        <DataProvider>{children}</DataProvider>
-      </ToastProvider>
-    </AuthProvider>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+      <AuthProvider>
+        <ToastProvider>
+          <DataProvider>{children}</DataProvider>
+        </ToastProvider>
+      </AuthProvider>
+    </ThemeProvider>
   )
 }

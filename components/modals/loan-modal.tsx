@@ -6,9 +6,9 @@ import { Check, ChevronDown, Search } from 'lucide-react'
 import { Badge, Field, Modal } from '@/components/ui/kit'
 import { Button } from '@/components/ui/button'
 import { useData, useToast, type InstallmentInput, type LoanInput } from '@/components/providers'
-import { FREQUENCIES, FREQUENCY_DAYS, FREQUENCY_LABEL } from '@/lib/derive'
+import { INSTALLMENT_STATUS_LABEL, FREQUENCIES, FREQUENCY_DAYS, FREQUENCY_LABEL } from '@/lib/derive'
 import { formatDate, isoFromInputDate, money, normalize, parseAmount, toInputDate } from '@/lib/format'
-import type { LoanFrequency } from '@/lib/types'
+import type { LoanFrequency, LoanStatus } from '@/lib/types'
 
 function addDays(base: Date, days: number) {
   const date = new Date(base)
@@ -37,16 +37,29 @@ export function LoanModal({
   const [installment, setInstallment] = useState('')
   const [frequency, setFrequency] = useState<LoanFrequency>('diaria')
   const [disbursed, setDisbursed] = useState(toInputDate())
-  const [start, setStart] = useState(toInputDate())
+  const [nextDue, setNextDue] = useState(toInputDate())
+  const [paidCount, setPaidCount] = useState('0')
+  const [loanState, setLoanState] = useState<LoanStatus>('activo')
   const [pickerQuery, setPickerQuery] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+
+  const countValue = Number(count) || 0
+  const paidValue = Math.max(0, Math.min(Number(paidCount) || 0, countValue))
+  const pendingCount = Math.max(0, countValue - paidValue)
+  const anchorIndex = countValue > 0 ? Math.min(paidValue, countValue - 1) : 0
 
   useEffect(() => {
     const totalValue = parseAmount(total)
     const countValue = Number(count) || 0
     if (totalValue > 0 && countValue > 0) setInstallment(String(Math.round(totalValue / countValue)))
   }, [total, count])
+
+  useEffect(() => {
+    if (!nextDue) return
+    const overdue = new Date(`${nextDue}T00:00:00`).getTime() < new Date(`${toInputDate()}T00:00:00`).getTime()
+    setLoanState(overdue ? 'en_mora' : 'activo')
+  }, [nextDue])
 
   const filteredClients = useMemo(() => {
     if (!pickerQuery.trim()) return clients.slice(0, 8)
@@ -57,11 +70,11 @@ export function LoanModal({
 
   const dates = useMemo(() => {
     const countValue = Number(count) || 0
-    if (!start || countValue <= 0) return [] as Date[]
-    const base = new Date(`${start}T00:00:00`)
+    if (!nextDue || countValue <= 0) return [] as Date[]
+    const anchor = new Date(`${nextDue}T00:00:00`)
     const days = FREQUENCY_DAYS[frequency] ?? 1
-    return Array.from({ length: countValue }, (_, index) => addDays(base, index * days))
-  }, [start, count, frequency])
+    return Array.from({ length: countValue }, (_, index) => addDays(anchor, (index - anchorIndex) * days))
+  }, [nextDue, count, frequency, anchorIndex])
 
   function next() {
     setError('')
@@ -72,7 +85,11 @@ export function LoanModal({
     if (step === 2) {
       if (parseAmount(amount) <= 0) return setError('El monto prestado debe ser mayor a 0.')
       if (parseAmount(total) <= 0) return setError('El total a pagar debe ser mayor a 0.')
-      if (Number(count) <= 0) return setError('El número de cuotas debe ser mayor a 0.')
+      if (countValue <= 0) return setError('El número de cuotas debe ser mayor a 0.')
+      if (Number(paidCount) < 0 || Number(paidCount) > countValue) {
+        return setError(`Las cuotas ya pagadas deben estar entre 0 y ${countValue}.`)
+      }
+      if (pendingCount > 0 && !nextDue) return setError('Indica la próxima fecha de pago.')
     }
     setStep((value) => Math.min(4, value + 1))
   }
@@ -93,10 +110,12 @@ export function LoanModal({
         installment_amount: installmentValue,
         frequency,
         disbursed_at: isoFromInputDate(disbursed),
-        start_at: isoFromInputDate(start),
+        start_at: isoFromInputDate(toInputDate(dates[0].toISOString())),
         end_at: isoFromInputDate(toInputDate(dates[dates.length - 1].toISOString())),
         interest_rate: 0,
         notes: '',
+        paid_installments: paidValue,
+        status: loanState,
       }
       const installmentRows: InstallmentInput[] = dates.map((date, index) => ({
         number: index + 1,
@@ -116,6 +135,12 @@ export function LoanModal({
   }
 
   const installmentValue = parseAmount(installment)
+
+  function statusFor(index: number) {
+    if (index < paidValue) return 'pagada'
+    const overdue = dates[index] && dates[index].getTime() < new Date(`${toInputDate()}T00:00:00`).getTime()
+    return overdue ? 'vencida' : 'pendiente'
+  }
 
   return (
     <Modal title="Nuevo préstamo" close={close} wide>
@@ -188,10 +213,29 @@ export function LoanModal({
               <Field label="Fecha de desembolso">
                 <input type="date" value={disbursed} onChange={(event) => setDisbursed(event.target.value)} />
               </Field>
-              <Field label="Inicio de pagos">
-                <input type="date" value={start} onChange={(event) => setStart(event.target.value)} />
+              <Field label="Cuotas ya pagadas">
+                <input value={paidCount} onChange={(event) => setPaidCount(event.target.value)} inputMode="numeric" />
+              </Field>
+              <Field label={pendingCount > 0 ? `Próxima fecha de pago (cuota #${anchorIndex + 1})` : 'Fecha de la última cuota'}>
+                <input type="date" value={nextDue} onChange={(event) => setNextDue(event.target.value)} />
               </Field>
             </div>
+            {pendingCount > 0 && (
+              <Field label="Estado del préstamo">
+                <div className="frequency">
+                  {(['activo', 'en_mora'] as LoanStatus[]).map((option) => (
+                    <button
+                      className={loanState === option ? 'selected' : ''}
+                      key={option}
+                      onClick={() => setLoanState(option)}
+                      type="button"
+                    >
+                      {option === 'activo' ? 'Al día' : 'En mora'}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+            )}
             <Field label="Frecuencia de pago">
               <div className="frequency">
                 {FREQUENCIES.map((option) => (
@@ -230,6 +274,10 @@ export function LoanModal({
                 ['Número de cuotas', count],
                 ['Valor de cuota', money(installmentValue)],
                 ['Frecuencia', FREQUENCY_LABEL[frequency]],
+                ['Cuotas pagadas', `${paidValue} de ${countValue}`],
+                ['Saldo pendiente', money(Math.max(0, parseAmount(total) - paidValue * installmentValue))],
+                ['Próxima cuota', paidValue < countValue && dates[paidValue] ? formatDate(dates[paidValue].toISOString()) : '—'],
+                ['Estado', loanState === 'en_mora' ? 'En mora' : 'Al día'],
                 ['Primera cuota', dates[0] ? formatDate(dates[0].toISOString()) : '—'],
                 ['Última cuota', dates.length ? formatDate(dates[dates.length - 1].toISOString()) : '—'],
               ].map(([label, value]) => (
@@ -246,19 +294,19 @@ export function LoanModal({
           <>
             <h3>Calendario de pagos</h3>
             <p>
-              Se generarán {dates.length} cuotas con frecuencia {FREQUENCY_LABEL[frequency].toLowerCase()}.
+              Se generarán {dates.length} cuotas con frecuencia {FREQUENCY_LABEL[frequency].toLowerCase()}
+              {paidValue > 0 ? ` (${paidValue} ya pagadas)` : ''}.
             </p>
             <div className="schedule">
-              {dates.slice(0, 8).map((date, index) => (
+              {dates.map((date, index) => (
                 <div key={date.toISOString()}>
                   <span>#{index + 1}</span>
                   <b>{formatDate(date.toISOString())}</b>
                   <strong>{money(installmentValue)}</strong>
-                  <Badge status="Pendiente" />
+                  <Badge status={INSTALLMENT_STATUS_LABEL[statusFor(index)]} />
                 </div>
               ))}
             </div>
-            {dates.length > 8 && <p className="center-note">Mostrando las primeras 8 cuotas de {dates.length}.</p>}
           </>
         )}
 

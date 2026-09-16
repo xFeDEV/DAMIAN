@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { WalletCards } from 'lucide-react'
+import { Eye, EyeOff, Loader2, LogIn, WalletCards } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { useAuth } from '@/components/providers'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 export function LoginForm() {
   const { user, ready, login } = useAuth()
@@ -11,6 +13,7 @@ export function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -25,7 +28,7 @@ export function LoginForm() {
       await login(email.trim(), password)
       router.replace('/')
     } catch {
-      setError('Correo o contraseña incorrectos.')
+      setError('Correo o contraseña incorrectos. Revisa e inténtalo de nuevo.')
     } finally {
       setSubmitting(false)
     }
@@ -33,7 +36,11 @@ export function LoginForm() {
 
   return (
     <div className="login-page">
-      <form className="login-card" onSubmit={onSubmit}>
+      <div className="login-fab">
+        <ThemeToggle />
+      </div>
+
+      <form className="login-card" onSubmit={onSubmit} noValidate>
         <div className="login-brand">
           <div className="brand-icon">
             <WalletCards />
@@ -44,35 +51,63 @@ export function LoginForm() {
           </div>
         </div>
 
-        <label className="field">
-          <span>Correo electrónico</span>
-          <input
-            type="email"
-            autoComplete="username"
-            placeholder="admin@damian.local"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-          />
-        </label>
+        <div className="login-fields">
+          <label className="field">
+            <span>Correo electrónico</span>
+            <input
+              type="email"
+              autoComplete="username"
+              placeholder="admin@damian.local"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              aria-invalid={!!error}
+              required
+            />
+          </label>
 
-        <label className="field">
-          <span>Contraseña</span>
-          <input
-            type="password"
-            autoComplete="current-password"
-            placeholder="••••••••"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
-        </label>
+          <div className="field">
+            <label className="field-label-row" htmlFor="login-password">
+              <span>Contraseña</span>
+              <button
+                type="button"
+                className="login-eye"
+                onClick={() => setShowPassword((value) => !value)}
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                {showPassword ? <EyeOff /> : <Eye />}
+              </button>
+            </label>
+            <input
+              id="login-password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              aria-invalid={!!error}
+              required
+            />
+          </div>
+        </div>
 
-        {error && <div className="login-error">{error}</div>}
+        {error && (
+          <div className="login-error" role="alert">
+            {error}
+          </div>
+        )}
 
-        <button className="login-submit" type="submit" disabled={submitting}>
+        <Button
+          type="submit"
+          variant="default"
+          size="lg"
+          disabled={submitting || !email || !password}
+          className="login-submit h-11 w-full gap-2"
+        >
+          {submitting ? <Loader2 className="animate-spin" /> : <LogIn />}
           {submitting ? 'Ingresando…' : 'Ingresar'}
-        </button>
+        </Button>
+
+        <p className="login-footnote">Acceso reservado para operadores de Damián.</p>
       </form>
     </div>
   )

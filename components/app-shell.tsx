@@ -19,6 +19,7 @@ import {
   X,
 } from 'lucide-react'
 import { useAuth, useData } from '@/components/providers'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { Avatar, PageLoader } from '@/components/ui/kit'
 import { normalize } from '@/lib/format'
 import type { Client } from '@/lib/types'
@@ -194,6 +195,7 @@ export function AppShell({
                 </div>
               )}
             </div>
+            <ThemeToggle />
             <button className="icon-btn" title="Notificaciones" aria-label="Notificaciones">
               <Bell />
               <i />
