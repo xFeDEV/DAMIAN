@@ -2,20 +2,25 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Banknote, CheckCircle2, CircleDollarSign, Download, Eye, Plus, Search, WalletCards } from 'lucide-react'
+import { Banknote, CheckCircle2, CircleDollarSign, Download, Eye, Pencil, Plus, Search, WalletCards } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge, DataTable, Empty, Head, Stat } from '@/components/ui/kit'
 import { LoanModal } from '@/components/modals/loan-modal'
-import { useData, useLookups } from '@/components/providers'
+import { useAuth, useData, useLookups } from '@/components/providers'
 import { LOAN_STATUS_LABEL, FREQUENCY_LABEL, loanProgress } from '@/lib/derive'
 import { downloadCSV, formatDate, money, normalize } from '@/lib/format'
+import type { Loan } from '@/lib/types'
 
 export default function LoansView() {
   const { loans } = useData()
+  const { user } = useAuth()
   const { clientById } = useLookups()
   const router = useRouter()
   const [query, setQuery] = useState('')
   const [showModal, setShowModal] = useState(false)
+  const [editLoan, setEditLoan] = useState<Loan | null>(null)
+
+  const isAdmin = user?.role === 'admin'
 
   const stats = useMemo(() => {
     const active = loans.filter((loan) => loan.status !== 'finalizado')
@@ -137,6 +142,11 @@ export default function LoansView() {
                       <button className="icon-btn" onClick={() => router.push(`/prestamos/${loan.id}`)}>
                         <Eye />
                       </button>
+                      {isAdmin && (
+                        <button className="icon-btn" onClick={() => setEditLoan(loan)} aria-label="Editar préstamo">
+                          <Pencil />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )
@@ -153,6 +163,7 @@ export default function LoansView() {
       </div>
 
       {showModal && <LoanModal close={() => setShowModal(false)} />}
+      {editLoan && <LoanModal loan={editLoan} close={() => setEditLoan(null)} />}
     </>
   )
 }

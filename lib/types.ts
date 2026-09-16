@@ -41,6 +41,7 @@ export interface Loan extends RecordModel {
   start_at: string
   end_at: string
   paid_total: number
+  base_paid: number
   status: LoanStatus | ''
   notes: string
 }

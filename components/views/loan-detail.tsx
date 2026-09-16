@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Banknote, CheckCircle2, ChevronLeft, CircleDollarSign, WalletCards } from 'lucide-react'
+import { Banknote, CheckCircle2, ChevronLeft, CircleDollarSign, Pencil, WalletCards } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge, DataTable, Empty, Stat } from '@/components/ui/kit'
+import { LoanModal } from '@/components/modals/loan-modal'
 import { PaymentModal } from '@/components/modals/payment-modal'
-import { useData, useLookups } from '@/components/providers'
+import { useAuth, useData, useLookups } from '@/components/providers'
 import { FREQUENCY_LABEL, INSTALLMENT_STATUS_LABEL, LOAN_STATUS_LABEL, loanProgress } from '@/lib/derive'
 import { formatDate, money } from '@/lib/format'
 
@@ -14,9 +15,13 @@ export default function LoanDetailView() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
   const { installments } = useData()
+  const { user } = useAuth()
   const { loanById, clientById } = useLookups()
   const [showPayment, setShowPayment] = useState(false)
+  const [paymentNumber, setPaymentNumber] = useState<number | undefined>()
+  const [showEdit, setShowEdit] = useState(false)
 
+  const isAdmin = user?.role === 'admin'
   const loan = params?.id ? loanById.get(params.id) : undefined
   const client = loan ? clientById.get(loan.client) : undefined
 
@@ -61,10 +66,23 @@ export default function LoanDetailView() {
             </b>
           </p>
         </div>
-        <Button onClick={() => setShowPayment(true)}>
-          <Banknote data-icon="inline-start" />
-          Registrar pago
-        </Button>
+        <div style={{ display: 'flex', gap: 9 }}>
+          {isAdmin && (
+            <Button variant="outline" onClick={() => setShowEdit(true)}>
+              <Pencil data-icon="inline-start" />
+              Editar
+            </Button>
+          )}
+          <Button
+            onClick={() => {
+              setPaymentNumber(undefined)
+              setShowPayment(true)
+            }}
+          >
+            <Banknote data-icon="inline-start" />
+            Registrar pago
+          </Button>
+        </div>
       </div>
 
       <div className="stats-grid">
@@ -142,7 +160,13 @@ export default function LoanDetailView() {
                   </td>
                   <td>
                     {item.status !== 'pagada' && (
-                      <button className="table-action" onClick={() => setShowPayment(true)}>
+                      <button
+                        className="table-action"
+                        onClick={() => {
+                          setPaymentNumber(item.number)
+                          setShowPayment(true)
+                        }}
+                      >
                         Registrar pago
                       </button>
                     )}
@@ -160,7 +184,10 @@ export default function LoanDetailView() {
         </DataTable>
       </div>
 
-      {showPayment && <PaymentModal loanId={loan.id} close={() => setShowPayment(false)} />}
+      {showPayment && (
+        <PaymentModal loanId={loan.id} uptoInstallmentNumber={paymentNumber} close={() => setShowPayment(false)} />
+      )}
+      {showEdit && <LoanModal loan={loan} close={() => setShowEdit(false)} />}
     </>
   )
 }

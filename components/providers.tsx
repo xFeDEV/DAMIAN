@@ -167,6 +167,7 @@ interface DataContextValue extends DataSnapshot {
   createClient: (input: ClientInput) => Promise<Client>
   updateClient: (id: string, input: ClientInput) => Promise<Client>
   createLoan: (loan: LoanInput, installments: InstallmentInput[]) => Promise<Loan>
+  updateLoan: (id: string, loan: LoanInput, installments: InstallmentInput[]) => Promise<Loan>
   registerPayment: (input: PaymentInput) => Promise<Payment>
   deletePayment: (id: string) => Promise<void>
   updateSettings: (id: string, input: Partial<Settings>) => Promise<Settings>
@@ -273,6 +274,7 @@ function DataProvider({ children }: { children: React.ReactNode }) {
         opening_balance: loan.total,
         balance,
         paid_total: paidTotal,
+        base_paid: paidTotal,
         status,
         ...loanFields,
       })
@@ -300,6 +302,77 @@ function DataProvider({ children }: { children: React.ReactNode }) {
       return record
     },
     [data.loans, refresh],
+  )
+
+  const updateLoan = useCallback(
+    async (id: string, loan: LoanInput, installments: InstallmentInput[]) => {
+      const { paid_installments: paidInstallmentsInput, status: statusInput, ...loanFields } = loan
+      const loanPayments = data.payments.filter((item) => item.loan === id)
+
+      if (loanPayments.length > 0) {
+        // With payments registered, the backend hook owns the installments.
+        // Only touch the loan terms and derive balance from the base paid amount + payments.
+        const current = data.loans.find((item) => item.id === id)
+        const basePaid = Number(current?.base_paid) || 0
+        const paidTotal = basePaid + loanPayments.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+        const balance = Math.max(0, loan.total - paidTotal)
+        const status: LoanStatus = balance <= 0 ? 'finalizado' : statusInput || 'activo'
+        const record = await pb.collection('loans').update<Loan>(id, {
+          opening_balance: loan.total,
+          balance,
+          paid_total: paidTotal,
+          base_paid: basePaid,
+          status,
+          ...loanFields,
+        })
+        await refresh()
+        return record
+      }
+
+      const paidCount = Math.max(0, Math.min(paidInstallmentsInput ?? 0, loan.installments_count))
+      const paidTotal = paidCount * loan.installment_amount
+      const balance = Math.max(0, loan.total - paidTotal)
+      const status: LoanStatus = balance <= 0 ? 'finalizado' : statusInput || 'activo'
+      const record = await pb.collection('loans').update<Loan>(id, {
+        opening_balance: loan.total,
+        balance,
+        paid_total: paidTotal,
+        base_paid: paidTotal,
+        status,
+        ...loanFields,
+      })
+
+      const existing = data.installments.filter((item) => item.loan === id)
+      const byNumber = new Map(existing.map((item) => [item.number, item]))
+      const today = Date.now()
+
+      await Promise.all(
+        installments.map((item) => {
+          const done = item.number <= paidCount
+          const overdue = !done && new Date(item.due_date.replace(' ', 'T')).getTime() < today
+          const payload = {
+            number: item.number,
+            due_date: item.due_date,
+            amount: item.amount,
+            paid: done ? item.amount : 0,
+            status: item.status ?? (done ? 'pagada' : overdue ? 'vencida' : 'pendiente'),
+          }
+          const current = byNumber.get(item.number)
+          return current
+            ? pb.collection('installments').update(current.id, payload)
+            : pb.collection('installments').create({ loan: id, client: record.client, ...payload })
+        }),
+      )
+
+      const extra = existing.filter((item) => item.number > loan.installments_count)
+      if (extra.length > 0) {
+        await Promise.all(extra.map((item) => pb.collection('installments').delete(item.id)))
+      }
+
+      await refresh()
+      return record
+    },
+    [data.payments, data.loans, data.installments, refresh],
   )
 
   const registerPayment = useCallback(
@@ -350,6 +423,7 @@ function DataProvider({ children }: { children: React.ReactNode }) {
         createClient,
         updateClient,
         createLoan,
+        updateLoan,
         registerPayment,
         deletePayment,
         updateSettings,

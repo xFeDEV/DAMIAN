@@ -7,9 +7,42 @@ import { Button } from '@/components/ui/button'
 import { useData, useToast, useLookups } from '@/components/providers'
 import { INSTALLMENT_STATUS_LABEL, LOAN_STATUS_LABEL, METHOD_LABEL, PAYMENT_METHODS } from '@/lib/derive'
 import { formatDate, money, parseAmount, toInputDate } from '@/lib/format'
-import type { PaymentMethod } from '@/lib/types'
+import type { Installment, PaymentMethod } from '@/lib/types'
 
-export function PaymentModal({ loanId, close, onDone }: { loanId: string; close: () => void; onDone?: () => void }) {
+function coverageOf(rows: Installment[], value: number) {
+  let remaining = value
+  let full = 0
+  let first = 0
+  let last = 0
+  let partial = false
+  for (const item of rows) {
+    if (remaining <= 0) break
+    const amountValue = Number(item.amount) || 0
+    if (!first) first = item.number
+    if (amountValue > 0 && remaining >= amountValue) {
+      full += 1
+      last = item.number
+      remaining -= amountValue
+    } else {
+      last = item.number
+      partial = amountValue > 0
+      break
+    }
+  }
+  return { full, first, last, partial }
+}
+
+export function PaymentModal({
+  loanId,
+  uptoInstallmentNumber,
+  close,
+  onDone,
+}: {
+  loanId: string
+  uptoInstallmentNumber?: number
+  close: () => void
+  onDone?: () => void
+}) {
   const { installments, registerPayment } = useData()
   const { loanById, clientById } = useLookups()
   const notify = useToast()
@@ -27,13 +60,25 @@ export function PaymentModal({ loanId, close, onDone }: { loanId: string; close:
 
   const target = pendingInstallments[0]
   const pending = Number(loan?.balance ?? 0) || 0
-  const [amount, setAmount] = useState(String(target?.amount ?? pending ?? 0))
+
+  const initialAmount = (() => {
+    if (uptoInstallmentNumber) {
+      const upto = pendingInstallments.filter((item) => item.number <= uptoInstallmentNumber)
+      if (upto.length > 0) return upto.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+    }
+    return Number(target?.amount ?? pending ?? 0)
+  })()
+
+  const [amount, setAmount] = useState(String(initialAmount))
+  const [cuotasInput, setCuotasInput] = useState(String(pendingInstallments.filter((item) => item.number <= (uptoInstallmentNumber || 0)).length || 1))
   const [paidAt, setPaidAt] = useState(toInputDate())
   const [method, setMethod] = useState<PaymentMethod>('efectivo')
   const [reference, setReference] = useState('')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+
+  const coverage = coverageOf(pendingInstallments, parseAmount(amount))
 
   if (!loan || !client) {
     return (
@@ -48,6 +93,21 @@ export function PaymentModal({ loanId, close, onDone }: { loanId: string; close:
         </div>
       </Modal>
     )
+  }
+
+  function applyCuotas(value: string) {
+    const count = Math.max(0, Math.min(Number(value) || 0, pendingInstallments.length))
+    setCuotasInput(value)
+    const sum = pendingInstallments.slice(0, count).reduce((total, item) => total + (Number(item.amount) || 0), 0)
+    setAmount(String(pending > 0 ? Math.min(sum, pending) : sum))
+  }
+
+  function applyOverdue() {
+    const overdue = pendingInstallments.filter((item) => item.status === 'vencida')
+    if (overdue.length === 0) return
+    setCuotasInput(String(overdue.length))
+    const sum = overdue.reduce((total, item) => total + (Number(item.amount) || 0), 0)
+    setAmount(String(pending > 0 ? Math.min(sum, pending) : sum))
   }
 
   async function onSave() {
@@ -111,6 +171,40 @@ export function PaymentModal({ loanId, close, onDone }: { loanId: string; close:
         <Field label="Valor recibido *">
           <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="numeric" />
         </Field>
+
+        <Field label="Cuotas a pagar">
+          <input value={cuotasInput} onChange={(event) => applyCuotas(event.target.value)} inputMode="numeric" />
+        </Field>
+        <div className="pills" style={{ marginBottom: 16 }}>
+          <button type="button" onClick={() => applyCuotas('1')}>
+           1 cuota
+          </button>
+          <button type="button" onClick={applyOverdue}>
+            Vencidas
+          </button>
+          <button type="button" onClick={() => applyCuotas(String(pendingInstallments.length))}>
+            Todas ({pendingInstallments.length})
+          </button>
+        </div>
+
+        <div className="due-box" style={{ margin: '0 0 16px' }}>
+          <div>
+            <span>Cubre</span>
+            <b>
+              {coverage.full > 0
+                ? `${coverage.full} cuota(s)${coverage.first !== coverage.last ? ` (#${coverage.first}–#${coverage.last})` : ` (#${coverage.first})`}`
+                : 'Ninguna cuota completa'}
+            </b>
+          </div>
+          <div>
+            <span>Saldo después</span>
+            <b>{money(Math.max(0, pending - parseAmount(amount)))}</b>
+          </div>
+        </div>
+        {coverage.partial && (
+          <p className="center-note">El valor cubre las cuotas completas hasta la #{coverage.last} y deja un abono parcial en esa cuota.</p>
+        )}
+
         <Field label="Fecha de pago">
           <input type="date" value={paidAt} onChange={(event) => setPaidAt(event.target.value)} />
         </Field>

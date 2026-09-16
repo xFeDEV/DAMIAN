@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { useData, useToast, type InstallmentInput, type LoanInput } from '@/components/providers'
 import { INSTALLMENT_STATUS_LABEL, FREQUENCIES, FREQUENCY_DAYS, FREQUENCY_LABEL } from '@/lib/derive'
 import { formatDate, isoFromInputDate, money, normalize, parseAmount, toInputDate } from '@/lib/format'
-import type { LoanFrequency, LoanStatus } from '@/lib/types'
+import type { Loan, LoanFrequency, LoanStatus } from '@/lib/types'
 
 function addDays(base: Date, days: number) {
   const date = new Date(base)
@@ -16,30 +16,58 @@ function addDays(base: Date, days: number) {
   return date
 }
 
+function parseRate(value: string) {
+  const rate = Number(String(value).replace(',', '.'))
+  return Number.isFinite(rate) ? rate : 0
+}
+
 export function LoanModal({
   close,
   clientId,
+  loan,
   onCreated,
 }: {
   close: () => void
   clientId?: string
+  loan?: Loan | null
   onCreated?: (loanId: string) => void
 }) {
-  const { clients, createLoan } = useData()
+  const { clients, installments, payments, createLoan, updateLoan } = useData()
   const notify = useToast()
   const router = useRouter()
 
-  const [step, setStep] = useState(1)
-  const [client, setClient] = useState(clientId || clients[0]?.id || '')
-  const [amount, setAmount] = useState('1000000')
-  const [total, setTotal] = useState('1200000')
-  const [count, setCount] = useState('20')
-  const [installment, setInstallment] = useState('')
-  const [frequency, setFrequency] = useState<LoanFrequency>('diaria')
-  const [disbursed, setDisbursed] = useState(toInputDate())
-  const [nextDue, setNextDue] = useState(toInputDate())
-  const [paidCount, setPaidCount] = useState('0')
-  const [loanState, setLoanState] = useState<LoanStatus>('activo')
+  const editing = !!loan
+  const loanInstallments = loan
+    ? installments.filter((item) => item.loan === loan.id).sort((a, b) => a.number - b.number)
+    : []
+  const hasPayments = loan ? payments.some((item) => item.loan === loan.id) : false
+
+  const [step, setStep] = useState(editing ? 2 : 1)
+  const [client, setClient] = useState(loan?.client || clientId || clients[0]?.id || '')
+  const [amount, setAmount] = useState(loan ? String(loan.amount) : '1000000')
+  const [interest, setInterest] = useState(
+    loan
+      ? String(
+          loan.interest_rate > 0
+            ? loan.interest_rate
+            : loan.amount > 0
+              ? Math.round((loan.total / loan.amount - 1) * 10000) / 100
+              : 0,
+        )
+      : '20',
+  )
+  const [total, setTotal] = useState(loan ? String(loan.total) : '1200000')
+  const [count, setCount] = useState(loan ? String(loan.installments_count || loanInstallments.length || '') : '20')
+  const [installment, setInstallment] = useState(loan ? String(loan.installment_amount) : '')
+  const [frequency, setFrequency] = useState<LoanFrequency>((loan?.frequency as LoanFrequency) || 'diaria')
+  const [disbursed, setDisbursed] = useState(loan ? toInputDate(loan.disbursed_at) : toInputDate())
+  const [nextDue, setNextDue] = useState(() => {
+    if (!loan) return toInputDate()
+    const pending = loanInstallments.find((item) => item.status !== 'pagada')
+    return pending ? toInputDate(pending.due_date) : toInputDate(loan.end_at)
+  })
+  const [paidCount, setPaidCount] = useState(String(loanInstallments.filter((item) => item.status === 'pagada').length))
+  const [loanState, setLoanState] = useState<LoanStatus>(loan?.status === 'en_mora' ? 'en_mora' : 'activo')
   const [pickerQuery, setPickerQuery] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -54,6 +82,12 @@ export function LoanModal({
     const countValue = Number(count) || 0
     if (totalValue > 0 && countValue > 0) setInstallment(String(Math.round(totalValue / countValue)))
   }, [total, count])
+
+  useEffect(() => {
+    if (interest.trim() === '') return
+    const amountValue = parseAmount(amount)
+    if (amountValue > 0) setTotal(String(Math.round(amountValue * (1 + parseRate(interest) / 100))))
+  }, [amount, interest])
 
   useEffect(() => {
     if (!nextDue) return
@@ -78,7 +112,7 @@ export function LoanModal({
 
   function next() {
     setError('')
-    if (step === 1 && !client) {
+    if (step === 1 && !editing && !client) {
       setError('Selecciona un cliente.')
       return
     }
@@ -95,7 +129,8 @@ export function LoanModal({
   }
 
   async function onSave() {
-    if (!selectedClient || dates.length === 0) return
+    const targetClientId = loan ? loan.client : selectedClient?.id || ''
+    if (!targetClientId || dates.length === 0) return
     setSaving(true)
     setError('')
     try {
@@ -103,7 +138,7 @@ export function LoanModal({
       const totalValue = parseAmount(total)
       const installmentValue = parseAmount(installment)
       const payload: LoanInput = {
-        client: selectedClient.id,
+        client: targetClientId,
         amount: amountValue,
         total: totalValue,
         installments_count: dates.length,
@@ -112,8 +147,8 @@ export function LoanModal({
         disbursed_at: isoFromInputDate(disbursed),
         start_at: isoFromInputDate(toInputDate(dates[0].toISOString())),
         end_at: isoFromInputDate(toInputDate(dates[dates.length - 1].toISOString())),
-        interest_rate: 0,
-        notes: '',
+        interest_rate: parseRate(interest),
+        notes: loan?.notes ?? '',
         paid_installments: paidValue,
         status: loanState,
       }
@@ -122,13 +157,19 @@ export function LoanModal({
         due_date: isoFromInputDate(toInputDate(date.toISOString())),
         amount: installmentValue,
       }))
-      const record = await createLoan(payload, installmentRows)
-      notify('Préstamo creado correctamente')
-      close()
-      if (onCreated) onCreated(record.id)
-      else router.push(`/prestamos/${record.id}`)
+      if (loan) {
+        await updateLoan(loan.id, payload, installmentRows)
+        notify('Préstamo actualizado correctamente')
+        close()
+      } else {
+        const record = await createLoan(payload, installmentRows)
+        notify('Préstamo creado correctamente')
+        close()
+        if (onCreated) onCreated(record.id)
+        else router.push(`/prestamos/${record.id}`)
+      }
     } catch {
-      setError('No se pudo crear el préstamo. Inténtalo de nuevo.')
+      setError(editing ? 'No se pudo actualizar el préstamo. Inténtalo de nuevo.' : 'No se pudo crear el préstamo. Inténtalo de nuevo.')
     } finally {
       setSaving(false)
     }
@@ -143,7 +184,7 @@ export function LoanModal({
   }
 
   return (
-    <Modal title="Nuevo préstamo" close={close} wide>
+    <Modal title={editing ? 'Editar préstamo' : 'Nuevo préstamo'} close={close} wide>
       <div className="stepper">
         {['Cliente', 'Información', 'Resumen', 'Calendario'].map((label, index) => (
           <div className={step >= index + 1 ? 'current' : ''} key={label}>
@@ -154,58 +195,89 @@ export function LoanModal({
       </div>
 
       <div className="modal-body loan-modal-body">
-        {step === 1 && (
-          <>
-            <h3>Selecciona un cliente</h3>
-            <p>El préstamo quedará asociado al historial del cliente.</p>
-            <div className="search-field">
-              <Search />
-              <input
-                placeholder="Buscar cliente..."
-                value={pickerQuery}
-                onChange={(event) => setPickerQuery(event.target.value)}
-              />
-            </div>
-            <div className="client-picker">
-              {filteredClients.length > 0 ? (
-                filteredClients.map((item) => (
-                  <button className={client === item.id ? 'picked' : ''} key={item.id} onClick={() => setClient(item.id)}>
-                    <div className="avatar small">
-                      {item.name
-                        .split(' ')
-                        .map((part) => part[0])
-                        .slice(0, 2)
-                        .join('')}
-                    </div>
-                    <div>
-                      <b>{item.name}</b>
-                      <span>
-                        {item.doc || item.code} · {item.city || 'Sin ciudad'}
-                      </span>
-                    </div>
-                    {client === item.id && <Check />}
-                  </button>
-                ))
-              ) : (
-                <p className="center-note">No encontramos clientes con esa búsqueda.</p>
-              )}
-            </div>
-          </>
-        )}
+        {step === 1 &&
+          (editing ? (
+            <>
+              <h3>Cliente</h3>
+              <p>El cliente del préstamo no se puede cambiar.</p>
+              <div className="client-picker">
+                <button className="picked" type="button">
+                  <div className="avatar small">{selectedClient ? selectedClient.name.slice(0, 2).toUpperCase() : '—'}</div>
+                  <div>
+                    <b>{selectedClient?.name ?? '—'}</b>
+                    <span>
+                      {selectedClient?.doc || selectedClient?.code || ''} · {selectedClient?.city || 'Sin ciudad'}
+                    </span>
+                  </div>
+                  <Check />
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h3>Selecciona un cliente</h3>
+              <p>El préstamo quedará asociado al historial del cliente.</p>
+              <div className="search-field">
+                <Search />
+                <input
+                  placeholder="Buscar cliente..."
+                  value={pickerQuery}
+                  onChange={(event) => setPickerQuery(event.target.value)}
+                />
+              </div>
+              <div className="client-picker">
+                {filteredClients.length > 0 ? (
+                  filteredClients.map((item) => (
+                    <button className={client === item.id ? 'picked' : ''} key={item.id} onClick={() => setClient(item.id)}>
+                      <div className="avatar small">
+                        {item.name
+                          .split(' ')
+                          .map((part) => part[0])
+                          .slice(0, 2)
+                          .join('')}
+                      </div>
+                      <div>
+                        <b>{item.name}</b>
+                        <span>
+                          {item.doc || item.code} · {item.city || 'Sin ciudad'}
+                        </span>
+                      </div>
+                      {client === item.id && <Check />}
+                    </button>
+                  ))
+                ) : (
+                  <p className="center-note">No encontramos clientes con esa búsqueda.</p>
+                )}
+              </div>
+            </>
+          ))}
 
-        {step === 2 && selectedClient && (
+        {step === 2 && (editing || selectedClient) && (
           <>
             <h3>Información del préstamo</h3>
-            <p>Define el acuerdo de pago con {selectedClient.name}.</p>
+            <p>Define el acuerdo de pago con {selectedClient?.name ?? '—'}.</p>
+            {hasPayments && (
+              <div className="alert-warn">
+                Este préstamo tiene pagos registrados: solo puedes editar montos, interés, notas, estado y fecha de desembolso.
+              </div>
+            )}
             <div className="form-grid">
               <Field label="Monto prestado *">
                 <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="numeric" />
+              </Field>
+              <Field label="Interés (%)">
+                <input value={interest} onChange={(event) => setInterest(event.target.value)} inputMode="decimal" />
               </Field>
               <Field label="Total a pagar *">
                 <input value={total} onChange={(event) => setTotal(event.target.value)} inputMode="numeric" />
               </Field>
               <Field label="Número de cuotas *">
-                <input value={count} onChange={(event) => setCount(event.target.value)} inputMode="numeric" />
+                <input
+                  value={count}
+                  onChange={(event) => setCount(event.target.value)}
+                  inputMode="numeric"
+                  disabled={hasPayments}
+                />
               </Field>
               <Field label="Valor de cuota *">
                 <input value={installment} onChange={(event) => setInstallment(event.target.value)} inputMode="numeric" />
@@ -214,10 +286,20 @@ export function LoanModal({
                 <input type="date" value={disbursed} onChange={(event) => setDisbursed(event.target.value)} />
               </Field>
               <Field label="Cuotas ya pagadas">
-                <input value={paidCount} onChange={(event) => setPaidCount(event.target.value)} inputMode="numeric" />
+                <input
+                  value={paidCount}
+                  onChange={(event) => setPaidCount(event.target.value)}
+                  inputMode="numeric"
+                  disabled={hasPayments}
+                />
               </Field>
               <Field label={pendingCount > 0 ? `Próxima fecha de pago (cuota #${anchorIndex + 1})` : 'Fecha de la última cuota'}>
-                <input type="date" value={nextDue} onChange={(event) => setNextDue(event.target.value)} />
+                <input
+                  type="date"
+                  value={nextDue}
+                  onChange={(event) => setNextDue(event.target.value)}
+                  disabled={hasPayments}
+                />
               </Field>
             </div>
             {pendingCount > 0 && (
@@ -244,6 +326,7 @@ export function LoanModal({
                     key={option}
                     onClick={() => setFrequency(option)}
                     type="button"
+                    disabled={hasPayments}
                   >
                     {FREQUENCY_LABEL[option]}
                     <small>
@@ -262,14 +345,15 @@ export function LoanModal({
           </>
         )}
 
-        {step === 3 && selectedClient && (
+        {step === 3 && (editing || selectedClient) && (
           <>
             <h3>Resumen del préstamo</h3>
             <p>Revisa la información antes de generar el calendario.</p>
             <div className="summary-grid">
               {[
-                ['Cliente', selectedClient.name],
+                ['Cliente', selectedClient?.name ?? '—'],
                 ['Monto prestado', money(parseAmount(amount))],
+                ['Interés', `${parseRate(interest)}%`],
                 ['Total a pagar', money(parseAmount(total))],
                 ['Número de cuotas', count],
                 ['Valor de cuota', money(installmentValue)],
@@ -314,8 +398,12 @@ export function LoanModal({
       </div>
 
       <div className="modal-foot">
-        <Button variant="outline" onClick={step === 1 ? close : () => setStep(step - 1)} disabled={saving}>
-          {step === 1 ? 'Cancelar' : 'Atrás'}
+        <Button
+          variant="outline"
+          onClick={step <= (editing ? 2 : 1) ? close : () => setStep(step - 1)}
+          disabled={saving}
+        >
+          {step <= (editing ? 2 : 1) ? 'Cancelar' : 'Atrás'}
         </Button>
         {step < 4 ? (
           <Button onClick={next}>
@@ -325,7 +413,7 @@ export function LoanModal({
         ) : (
           <Button onClick={onSave} disabled={saving}>
             <Check data-icon="inline-start" />
-            {saving ? 'Creando…' : 'Crear préstamo'}
+            {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear préstamo'}
           </Button>
         )}
       </div>
