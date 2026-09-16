@@ -1,4 +1,5 @@
 import type { Installment, Loan, Payment } from './types'
+import { parseWallClock } from './format'
 
 export type Tone = 'good' | 'warn' | 'bad' | 'muted'
 
@@ -128,14 +129,14 @@ export function sumPayments(payments: Payment[]) {
 }
 
 export function isSameMonth(iso: string, reference = new Date()) {
-  if (!iso) return false
-  const date = new Date(iso.replace(' ', 'T'))
+  const date = parseWallClock(iso)
+  if (!date) return false
   return date.getFullYear() === reference.getFullYear() && date.getMonth() === reference.getMonth()
 }
 
 export function isSameDay(iso: string, reference = new Date()) {
-  if (!iso) return false
-  const date = new Date(iso.replace(' ', 'T'))
+  const date = parseWallClock(iso)
+  if (!date) return false
   return (
     date.getFullYear() === reference.getFullYear() &&
     date.getMonth() === reference.getMonth() &&

@@ -17,7 +17,7 @@ import {
   METHOD_LABEL,
   loanProgress,
 } from '@/lib/derive'
-import { formatDate, money, relativeTime } from '@/lib/format'
+import { formatDate, formatTimestampDate, money, relativeTime } from '@/lib/format'
 
 type Tab = 'resumen' | 'prestamos' | 'pagos' | 'actividad'
 
@@ -103,7 +103,7 @@ export default function ClientDetailView() {
         </div>
         <div>
           <span>Cliente desde</span>
-          <b>{formatDate(client.created)}</b>
+          <b>{formatTimestampDate(client.created)}</b>
         </div>
       </div>
 

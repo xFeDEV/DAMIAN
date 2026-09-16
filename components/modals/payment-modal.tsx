@@ -6,7 +6,7 @@ import { Avatar, Badge, Field, Modal } from '@/components/ui/kit'
 import { Button } from '@/components/ui/button'
 import { useData, useToast, useLookups } from '@/components/providers'
 import { INSTALLMENT_STATUS_LABEL, LOAN_STATUS_LABEL, METHOD_LABEL, PAYMENT_METHODS } from '@/lib/derive'
-import { formatDate, money, parseAmount, toInputDate } from '@/lib/format'
+import { formatDate, isoFromInputDate, money, parseAmount, toInputDate } from '@/lib/format'
 import type { Installment, PaymentMethod } from '@/lib/types'
 
 function coverageOf(rows: Installment[], value: number) {
@@ -128,7 +128,7 @@ export function PaymentModal({
         client: loan!.client,
         installment: target?.id,
         amount: value,
-        paid_at: `${paidAt} 00:00:00.000Z`.replace('T', ' '),
+        paid_at: isoFromInputDate(paidAt),
         method,
         reference,
         notes,

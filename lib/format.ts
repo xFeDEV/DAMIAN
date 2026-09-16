@@ -21,7 +21,27 @@ function parseDate(iso?: string | null) {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
+// Calendar dates are stored converted to UTC (e.g. "2026-09-15 05:00:00.000Z").
+// Parse them as the wall-clock value they hold so the displayed day never shifts
+// with the browser timezone.
+export function parseWallClock(iso?: string | null) {
+  if (!iso) return null
+  const naive = String(iso)
+    .trim()
+    .replace(/([zZ]|[+-]\d{2}:?\d{2})$/, '')
+    .replace(' ', 'T')
+  const date = new Date(naive)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
 export function formatDate(iso?: string | null) {
+  const date = parseWallClock(iso)
+  if (!date) return '—'
+  return date.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+// For real timestamps (records' created/updated), shown in the local timezone.
+export function formatTimestampDate(iso?: string | null) {
   const date = parseDate(iso)
   if (!date) return '—'
   return date.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -50,11 +70,11 @@ export function relativeTime(iso?: string | null) {
   if (hours < 24) return `Hace ${hours} h`
   const days = Math.round(hours / 24)
   if (days < 30) return `Hace ${days} d`
-  return formatDate(iso)
+  return formatTimestampDate(iso)
 }
 
 export function toInputDate(iso?: string | null) {
-  const date = parseDate(iso) ?? new Date()
+  const date = parseWallClock(iso) ?? new Date()
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
