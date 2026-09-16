@@ -11,6 +11,13 @@ import { useData, useLookups } from '@/components/providers'
 import { ACTIVITY_LABEL, activityTone, INSTALLMENT_STATUS_LABEL, isSameDay, isSameMonth } from '@/lib/derive'
 import { compactMoney, formatDate, formatLongDate, money, relativeTime } from '@/lib/format'
 
+const DONUT_COLORS: Record<string, string> = {
+  blue: 'var(--accent-bar)',
+  amber: 'var(--warn)',
+  red: 'var(--danger)',
+  gray: 'var(--muted-bar)',
+}
+
 export default function DashboardView() {
   const router = useRouter()
   const { loans, installments, payments, activity } = useData()
@@ -79,6 +86,19 @@ export default function DashboardView() {
     ]
   }, [loans, today])
 
+  const donut = useMemo(() => {
+    const total = portfolio.reduce((sum, item) => sum + item.value, 0)
+    if (total <= 0) return 'conic-gradient(var(--divider-strong) 0 100%)'
+    let acc = 0
+    const stops = portfolio.map((item) => {
+      const start = (acc / total) * 100
+      acc += item.value
+      const end = (acc / total) * 100
+      return `${DONUT_COLORS[item.tone]} ${start.toFixed(2)}% ${end.toFixed(2)}%`
+    })
+    return `conic-gradient(${stops.join(', ')})`
+  }, [portfolio])
+
   const upcoming = useMemo(
     () =>
       installments
@@ -127,7 +147,7 @@ export default function DashboardView() {
 
         <div className="card portfolio-chart">
           <Section title="Estado de cartera" desc="Distribución actual" />
-          <div className="donut">
+          <div className="donut" style={{ background: donut }}>
             <div>
               <b>{portfolio[0].pct}%</b>
               <span>al día</span>
