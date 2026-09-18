@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, ChevronDown, Search } from 'lucide-react'
-import { Badge, Field, Modal } from '@/components/ui/kit'
+import { Badge, Field, Modal, MoneyInput } from '@/components/ui/kit'
 import { Button } from '@/components/ui/button'
 import { useData, useToast, type InstallmentInput, type LoanInput } from '@/components/providers'
 import { INSTALLMENT_STATUS_LABEL, FREQUENCIES, FREQUENCY_DAYS, FREQUENCY_LABEL } from '@/lib/derive'
@@ -263,13 +263,13 @@ export function LoanModal({
             )}
             <div className="form-grid">
               <Field label="Monto prestado *">
-                <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="numeric" />
+                <MoneyInput value={amount} onChange={setAmount} />
               </Field>
               <Field label="Interés (%)">
                 <input value={interest} onChange={(event) => setInterest(event.target.value)} inputMode="decimal" />
               </Field>
               <Field label="Total a pagar *">
-                <input value={total} onChange={(event) => setTotal(event.target.value)} inputMode="numeric" />
+                <MoneyInput value={total} onChange={setTotal} />
               </Field>
               <Field label="Número de cuotas *">
                 <input
@@ -280,7 +280,7 @@ export function LoanModal({
                 />
               </Field>
               <Field label="Valor de cuota *">
-                <input value={installment} onChange={(event) => setInstallment(event.target.value)} inputMode="numeric" />
+                <MoneyInput value={installment} onChange={setInstallment} />
               </Field>
               <Field label="Fecha de desembolso">
                 <input type="date" value={disbursed} onChange={(event) => setDisbursed(event.target.value)} />

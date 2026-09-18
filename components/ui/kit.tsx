@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { ArrowUpRight, FileText, X } from 'lucide-react'
 import { badgeTone } from '@/lib/derive'
-import { initials } from '@/lib/format'
+import { formatAmountInput, initials, parseAmount } from '@/lib/format'
 
 export function Avatar({ name, size }: { name: string; size?: 'small' | 'large' }) {
   const className = ['avatar', size].filter(Boolean).join(' ')
@@ -114,6 +114,31 @@ export function Field({ label, children }: { label: string; children: React.Reac
       <span>{label}</span>
       {children}
     </label>
+  )
+}
+
+export function MoneyInput({
+  value,
+  onChange,
+  disabled,
+  placeholder,
+  autoFocus,
+}: {
+  value: string
+  onChange: (value: string) => void
+  disabled?: boolean
+  placeholder?: string
+  autoFocus?: boolean
+}) {
+  return (
+    <input
+      value={formatAmountInput(parseAmount(value))}
+      onChange={(event) => onChange(event.target.value.replace(/\D/g, ''))}
+      inputMode="numeric"
+      disabled={disabled}
+      placeholder={placeholder}
+      autoFocus={autoFocus}
+    />
   )
 }
 

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { Check } from 'lucide-react'
-import { Avatar, Badge, Field, Modal } from '@/components/ui/kit'
+import { Avatar, Badge, Field, Modal, MoneyInput } from '@/components/ui/kit'
 import { Button } from '@/components/ui/button'
 import { useData, useToast, useLookups } from '@/components/providers'
 import { INSTALLMENT_STATUS_LABEL, LOAN_STATUS_LABEL, METHOD_LABEL, PAYMENT_METHODS } from '@/lib/derive'
@@ -169,7 +169,7 @@ export function PaymentModal({
 
       <div className="modal-body">
         <Field label="Valor recibido *">
-          <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="numeric" />
+          <MoneyInput value={amount} onChange={setAmount} />
         </Field>
 
         <Field label="Cuotas a pagar">
