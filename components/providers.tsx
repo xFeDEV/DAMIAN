@@ -275,18 +275,18 @@ function DataProvider({ children }: { children: React.ReactNode }) {
         opening_balance: loan.total,
         balance,
         paid_total: paidTotal,
-        base_paid: paidTotal,
+        base_paid: 0,
         status,
         ...loanFields,
       })
 
       if (installments.length > 0) {
         const today = Date.now()
-        await Promise.all(
+        const created = await Promise.all(
           installments.map((item) => {
             const done = item.number <= paidCount
             const overdue = !done && new Date(item.due_date.replace(' ', 'T')).getTime() < today
-            return pb.collection('installments').create({
+            return pb.collection('installments').create<Installment>({
               loan: record.id,
               client: record.client,
               number: item.number,
@@ -297,12 +297,14 @@ function DataProvider({ children }: { children: React.ReactNode }) {
             })
           }),
         )
+
+        await materializePaidInstallments(created, paidCount, record.id, record.client, user?.id)
       }
 
       await refresh()
       return record
     },
-    [data.loans, refresh],
+    [data.loans, refresh, user],
   )
 
   const updateLoan = useCallback(
@@ -338,7 +340,7 @@ function DataProvider({ children }: { children: React.ReactNode }) {
         opening_balance: loan.total,
         balance,
         paid_total: paidTotal,
-        base_paid: paidTotal,
+        base_paid: 0,
         status,
         ...loanFields,
       })
@@ -347,7 +349,7 @@ function DataProvider({ children }: { children: React.ReactNode }) {
       const byNumber = new Map(existing.map((item) => [item.number, item]))
       const today = Date.now()
 
-      await Promise.all(
+      const synced = await Promise.all(
         installments.map((item) => {
           const done = item.number <= paidCount
           const overdue = !done && new Date(item.due_date.replace(' ', 'T')).getTime() < today
@@ -360,8 +362,8 @@ function DataProvider({ children }: { children: React.ReactNode }) {
           }
           const current = byNumber.get(item.number)
           return current
-            ? pb.collection('installments').update(current.id, payload)
-            : pb.collection('installments').create({ loan: id, client: record.client, ...payload })
+            ? pb.collection('installments').update<Installment>(current.id, payload)
+            : pb.collection('installments').create<Installment>({ loan: id, client: record.client, ...payload })
         }),
       )
 
@@ -370,10 +372,12 @@ function DataProvider({ children }: { children: React.ReactNode }) {
         await Promise.all(extra.map((item) => pb.collection('installments').delete(item.id)))
       }
 
+      await materializePaidInstallments(synced, paidCount, record.id, record.client, user?.id)
+
       await refresh()
       return record
     },
-    [data.payments, data.loans, data.installments, refresh],
+    [data.payments, data.loans, data.installments, refresh, user],
   )
 
   const registerPayment = useCallback(
@@ -454,6 +458,35 @@ export function useLookups() {
     }),
     [clients, loans],
   )
+}
+
+const INITIAL_PAYMENT_NOTE = 'Saldo inicial (cuota ya pagada al registrar el crédito)'
+
+// Las cuotas marcadas como ya pagadas al crear/editar un crédito se materializan
+// como pagos reales para que cuenten en caja, recaudo y en el módulo de pagos.
+async function materializePaidInstallments(
+  installments: Installment[],
+  paidCount: number,
+  loanId: string,
+  clientId: string,
+  operatorId?: string,
+) {
+  if (paidCount <= 0) return
+  const paid = installments.filter((item) => item.number <= paidCount).sort((a, b) => a.number - b.number)
+  for (const item of paid) {
+    await pb.collection('payments').create({
+      code: `PG-${Date.now().toString().slice(-6)}-${item.number}`,
+      loan: loanId,
+      client: clientId,
+      installment: item.id,
+      amount: item.amount,
+      paid_at: item.due_date,
+      method: 'efectivo',
+      created_by: operatorId ?? '',
+      reference: '',
+      notes: INITIAL_PAYMENT_NOTE,
+    })
+  }
 }
 
 function computeNextCode(prefix: 'CL' | 'PR', codes: string[]) {
