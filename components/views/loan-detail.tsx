@@ -2,24 +2,26 @@
 
 import { useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Banknote, CheckCircle2, ChevronLeft, CircleDollarSign, Pencil, WalletCards } from 'lucide-react'
+import { Banknote, CheckCircle2, ChevronLeft, CircleDollarSign, Pencil, Trash2, WalletCards } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge, DataTable, Empty, Stat } from '@/components/ui/kit'
 import { LoanModal } from '@/components/modals/loan-modal'
 import { PaymentModal } from '@/components/modals/payment-modal'
-import { useAuth, useData, useLookups } from '@/components/providers'
+import { useAuth, useData, useLookups, useToast } from '@/components/providers'
 import { FREQUENCY_LABEL, INSTALLMENT_STATUS_LABEL, LOAN_STATUS_LABEL, loanProgress } from '@/lib/derive'
 import { formatDate, money } from '@/lib/format'
 
 export default function LoanDetailView() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
-  const { installments } = useData()
+  const { installments, deleteLoan } = useData()
   const { user } = useAuth()
+  const notify = useToast()
   const { loanById, clientById } = useLookups()
   const [showPayment, setShowPayment] = useState(false)
   const [paymentNumber, setPaymentNumber] = useState<number | undefined>()
   const [showEdit, setShowEdit] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const isAdmin = user?.role === 'admin'
   const loan = params?.id ? loanById.get(params.id) : undefined
@@ -29,6 +31,21 @@ export default function LoanDetailView() {
     () => installments.filter((item) => item.loan === loan?.id).sort((a, b) => a.number - b.number),
     [installments, loan?.id],
   )
+
+  async function onDeleteLoan() {
+    if (!loan || deleting) return
+    if (!window.confirm('¿Eliminar este crédito? Se borrarán también sus cuotas y todos sus pagos. Esta acción no se puede deshacer.')) return
+    setDeleting(true)
+    try {
+      await deleteLoan(loan.id)
+      notify('Crédito eliminado')
+      router.push('/prestamos')
+    } catch {
+      notify('No se pudo eliminar el crédito')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   if (!loan) {
     return (
@@ -67,6 +84,12 @@ export default function LoanDetailView() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 9 }}>
+          {isAdmin && (
+            <Button variant="destructive" onClick={onDeleteLoan} disabled={deleting}>
+              <Trash2 data-icon="inline-start" />
+              Eliminar
+            </Button>
+          )}
           {isAdmin && (
             <Button variant="outline" onClick={() => setShowEdit(true)}>
               <Pencil data-icon="inline-start" />
