@@ -171,6 +171,7 @@ interface DataContextValue extends DataSnapshot {
   registerPayment: (input: PaymentInput) => Promise<Payment>
   deletePayment: (id: string) => Promise<void>
   deleteLoan: (id: string) => Promise<void>
+  deleteClient: (id: string) => Promise<void>
   updateSettings: (id: string, input: Partial<Settings>) => Promise<Settings>
   nextCode: (prefix: 'CL' | 'PR') => string
 }
@@ -412,6 +413,14 @@ function DataProvider({ children }: { children: React.ReactNode }) {
     [refresh],
   )
 
+  const deleteClient = useCallback(
+    async (id: string) => {
+      await pb.send(`/api/damian/clients/${id}/delete`, { method: 'POST' })
+      await refresh()
+    },
+    [refresh],
+  )
+
   const updateSettings = useCallback(
     async (id: string, input: Partial<Settings>) => {
       const record = await pb.collection('settings').update<Settings>(id, input)
@@ -440,6 +449,7 @@ function DataProvider({ children }: { children: React.ReactNode }) {
         registerPayment,
         deletePayment,
         deleteLoan,
+        deleteClient,
         updateSettings,
         nextCode,
       }}

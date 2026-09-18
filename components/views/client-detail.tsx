@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { AlertTriangle, ChevronLeft, CircleDollarSign, CheckCircle2, Eye, Pencil, Plus, WalletCards } from 'lucide-react'
+import { AlertTriangle, ChevronLeft, CircleDollarSign, CheckCircle2, Eye, Pencil, Plus, Trash2, WalletCards } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, Badge, DataTable, Empty, Stat } from '@/components/ui/kit'
 import { ClientModal } from '@/components/modals/client-modal'
 import { LoanModal } from '@/components/modals/loan-modal'
-import { useData, useLookups } from '@/components/providers'
+import { useAuth, useData, useLookups, useToast } from '@/components/providers'
 import {
   ACTIVITY_LABEL,
   activityTone,
@@ -24,12 +24,16 @@ type Tab = 'resumen' | 'prestamos' | 'pagos' | 'actividad'
 export default function ClientDetailView() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
-  const { loans, installments, payments, activity } = useData()
+  const { loans, installments, payments, activity, deleteClient } = useData()
   const { clientById } = useLookups()
+  const { user } = useAuth()
+  const notify = useToast()
   const [tab, setTab] = useState<Tab>('resumen')
   const [modal, setModal] = useState<'edit' | 'loan' | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const client = params?.id ? clientById.get(params.id) : undefined
+  const isAdmin = user?.role === 'admin'
 
   const data = useMemo(() => {
     if (!client) return null
@@ -55,6 +59,22 @@ export default function ClientDetailView() {
 
   const { clientLoans, clientPayments, clientActivity, stats } = data
 
+  async function onDeleteClient() {
+    if (!client || deleting) return
+    if (!window.confirm('¿Eliminar este cliente? Esta acción no se puede deshacer. Solo se permite si el cliente nunca ha tenido créditos.')) return
+    setDeleting(true)
+    try {
+      await deleteClient(client.id)
+      notify('Cliente eliminado')
+      router.push('/clientes')
+    } catch (error) {
+      const message = (error as { response?: { message?: string } })?.response?.message
+      notify(message || 'No se pudo eliminar el cliente')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <>
       <div className="detail-head">
@@ -77,6 +97,12 @@ export default function ClientDetailView() {
           </div>
         </div>
         <div className="detail-actions">
+          {isAdmin && (
+            <Button variant="destructive" onClick={onDeleteClient} disabled={deleting}>
+              <Trash2 data-icon="inline-start" />
+              Eliminar
+            </Button>
+          )}
           <Button variant="outline" onClick={() => setModal('edit')}>
             <Pencil data-icon="inline-start" />
             Editar

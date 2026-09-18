@@ -47,6 +47,7 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   'payment.updated': 'Pago actualizado',
   'payment.deleted': 'Pago eliminado',
   'loan.deleted': 'Crédito eliminado',
+  'client.deleted': 'Cliente eliminado',
 }
 
 export function badgeTone(status: string): Tone {
@@ -59,7 +60,7 @@ export function badgeTone(status: string): Tone {
 export function activityTone(action: string): string {
   if (action === 'payment.created') return 'green'
   if (action === 'payment.updated') return 'blue'
-  if (action === 'payment.deleted' || action === 'loan.deleted') return 'red'
+  if (action === 'payment.deleted' || action === 'loan.deleted' || action === 'client.deleted') return 'red'
   return 'purple'
 }
 
