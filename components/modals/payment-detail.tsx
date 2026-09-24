@@ -1,9 +1,11 @@
 'use client'
 
-import { Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Download, ExternalLink, FileText, Trash2 } from 'lucide-react'
 import { Modal } from '@/components/ui/kit'
 import { Button } from '@/components/ui/button'
 import { useAuth, useData, useLookups, useToast } from '@/components/providers'
+import { pb } from '@/lib/pocketbase'
 import { METHOD_LABEL } from '@/lib/derive'
 import { formatDate, formatDateTime, money } from '@/lib/format'
 
@@ -22,9 +24,28 @@ export function PaymentDetailModal({
   const { clientById, loanById } = useLookups()
   const { user } = useAuth()
   const notify = useToast()
+  const [fileToken, setFileToken] = useState('')
 
   const payment = payments.find((item) => item.id === paymentId)
   const isAdmin = user?.role === 'admin'
+  const receiptName = payment?.receipt || ''
+
+  useEffect(() => {
+    let active = true
+    if (!receiptName) {
+      setFileToken('')
+      return
+    }
+    pb.files
+      .getToken()
+      .then((token) => {
+        if (active) setFileToken(token)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [receiptName])
 
   if (!payment) {
     return (
@@ -43,6 +64,12 @@ export function PaymentDetailModal({
 
   const client = clientById.get(payment.client)
   const loan = loanById.get(payment.loan)
+  const receiptOptions = fileToken ? { token: fileToken } : {}
+  const receiptUrl = payment.receipt ? pb.files.getURL(payment, payment.receipt, receiptOptions) : ''
+  const downloadUrl = payment.receipt
+    ? pb.files.getURL(payment, payment.receipt, { ...receiptOptions, download: true })
+    : ''
+  const receiptIsImage = /\.(png|jpe?g|webp|gif)$/i.test(payment.receipt || '')
 
   async function onDelete() {
     if (!payment) return
@@ -102,6 +129,36 @@ export function PaymentDetailModal({
             </div>
           ))}
         </div>
+
+        {payment.receipt && (
+          <div className="receipt-detail">
+            <span>Comprobante</span>
+            {receiptIsImage ? (
+              <a className="receipt-image" href={receiptUrl} target="_blank" rel="noopener noreferrer">
+                <img src={receiptUrl} alt="Comprobante de pago" />
+              </a>
+            ) : (
+              <div className="receipt-doc">
+                <FileText />
+                <span>{payment.receipt}</span>
+              </div>
+            )}
+            <div className="receipt-actions">
+              <Button
+                variant="outline"
+                nativeButton={false}
+                render={<a href={receiptUrl} target="_blank" rel="noopener noreferrer" />}
+              >
+                <ExternalLink />
+                Ver
+              </Button>
+              <Button variant="outline" nativeButton={false} render={<a href={downloadUrl} />}>
+                <Download />
+                Descargar
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="modal-foot">

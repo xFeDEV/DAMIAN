@@ -158,6 +158,7 @@ export interface PaymentInput {
   method: string
   reference?: string
   notes?: string
+  receipt?: File
 }
 
 interface DataContextValue extends DataSnapshot {
@@ -413,12 +414,14 @@ function DataProvider({ children }: { children: React.ReactNode }) {
   const registerPayment = useCallback(
     async (input: PaymentInput) => {
       const code = `PG-${Date.now().toString().slice(-6)}`
+      const { receipt, ...fields } = input
       const record = await pb.collection('payments').create<Payment>({
         code,
         created_by: user?.id ?? '',
         reference: '',
         notes: '',
-        ...input,
+        ...fields,
+        ...(receipt ? { receipt } : {}),
       })
       await refresh()
       return record

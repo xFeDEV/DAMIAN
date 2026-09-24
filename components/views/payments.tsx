@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Banknote, CalendarDays, CircleDollarSign, CreditCard, Download, Search, Trash2 } from 'lucide-react'
+import { Banknote, CalendarDays, CircleDollarSign, CreditCard, Download, Paperclip, Search, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DataTable, Empty, Head, Stat } from '@/components/ui/kit'
+import { PaymentDetailModal } from '@/components/modals/payment-detail'
 import { useAuth, useData, useLookups, useToast, useToday } from '@/components/providers'
 import { METHOD_LABEL, isSameDay, isSameMonth } from '@/lib/derive'
 import { downloadCSV, formatDate, money, normalize } from '@/lib/format'
@@ -24,6 +25,7 @@ export default function PaymentsView() {
   const today = useToday()
   const [query, setQuery] = useState('')
   const [filtro, setFiltro] = useState('')
+  const [detailPayment, setDetailPayment] = useState('')
 
   useEffect(() => {
     const value = new URLSearchParams(window.location.search).get('filtro')
@@ -144,18 +146,29 @@ export default function PaymentsView() {
                 const client = clientById.get(payment.client)
                 const loan = loanById.get(payment.loan)
                 return (
-                  <tr key={payment.id}>
+                  <tr key={payment.id} className="row-click" onClick={() => setDetailPayment(payment.id)}>
                     <td>{formatDate(payment.paid_at)}</td>
                     <td>
                       <b>{client?.name ?? '—'}</b>
                     </td>
                     <td>
-                      <button className="link" onClick={() => router.push(`/prestamos/${payment.loan}`)}>
+                      <button
+                        className="link"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          router.push(`/prestamos/${payment.loan}`)
+                        }}
+                      >
                         {loan?.code ?? '—'}
                       </button>
                     </td>
                     <td>
                       <b className="positive">{money(payment.amount)}</b>
+                      {payment.receipt && (
+                        <span className="clip-flag" title="Tiene comprobante">
+                          <Paperclip />
+                        </span>
+                      )}
                     </td>
                     <td>
                       <span className="method">
@@ -166,7 +179,14 @@ export default function PaymentsView() {
                     <td>{payment.created_by ? 'Operador' : 'Sistema'}</td>
                     {isAdmin && (
                       <td>
-                        <button className="icon-btn danger" onClick={() => onDelete(payment.id)} title="Eliminar pago">
+                        <button
+                          className="icon-btn danger"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onDelete(payment.id)
+                          }}
+                          title="Eliminar pago"
+                        >
                           <Trash2 />
                         </button>
                       </td>
@@ -184,6 +204,8 @@ export default function PaymentsView() {
           </tbody>
         </DataTable>
       </div>
+
+      {detailPayment && <PaymentDetailModal paymentId={detailPayment} close={() => setDetailPayment('')} />}
     </>
   )
 }

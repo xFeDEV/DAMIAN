@@ -101,3 +101,29 @@
 .public-skeleton{display:flex;flex-direction:column;gap:12px;padding-top:20px;padding-bottom:20px}
 .public-foot{max-width:640px;margin:28px auto 0;text-align:center;color:var(--text-faint);font-size:12px}
 @media(max-width:460px){.public-input-row{flex-direction:column}.public-input-row button{width:100%}.public-hero h1{font-size:24px}.total-block strong{font-size:30px}}
+
+.receipt-drop{border:1.5px dashed var(--border);border-radius:10px;background:var(--surface-2);padding:14px;cursor:pointer;transition:border-color .15s,background .15s}
+.receipt-drop:hover{border-color:var(--accent);background:var(--accent-soft)}
+.receipt-drop.has-file{cursor:default;border-style:solid}
+.receipt-empty{display:flex;align-items:center;gap:12px;color:var(--text-secondary)}
+.receipt-empty>svg{width:22px;height:22px;color:var(--accent);flex:none}
+.receipt-empty b{display:block;font-size:13px;color:var(--foreground)}
+.receipt-empty small{color:var(--text-faint);font-size:11px}
+.receipt-preview{display:flex;align-items:center;gap:12px}
+.receipt-preview img{width:52px;height:52px;border-radius:8px;object-fit:cover;border:1px solid var(--border);flex:none}
+.receipt-preview .receipt-file-icon{width:52px;height:52px;border-radius:8px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;flex:none}
+.receipt-file-icon svg{width:22px;height:22px}
+.receipt-preview>div{min-width:0;flex:1}
+.receipt-preview b{display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.receipt-preview small{color:var(--text-faint);font-size:11px}
+.receipt-hint{color:var(--text-faint);font-size:11px;margin-top:6px}
+.receipt-detail{margin-top:16px;display:flex;flex-direction:column;gap:10px}
+.receipt-detail>span{font-size:12px;font-weight:600;color:var(--text-secondary)}
+.receipt-image{display:block;border:1px solid var(--border);border-radius:10px;overflow:hidden;max-width:100%}
+.receipt-image img{display:block;width:100%;max-height:320px;object-fit:contain;background:var(--surface-2)}
+.receipt-doc{display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--surface-2);color:var(--text-secondary);font-size:13px;word-break:break-all}
+.receipt-doc svg{width:20px;height:20px;color:var(--accent);flex:none}
+.receipt-actions{display:flex;flex-wrap:wrap;gap:9px}
+.clip-flag{display:inline-flex;vertical-align:middle;margin-left:6px;color:var(--text-faint)}
+.clip-flag svg{width:13px;height:13px}
+.row-click{cursor:pointer}

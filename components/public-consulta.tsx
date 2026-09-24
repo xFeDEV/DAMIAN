@@ -182,6 +182,7 @@ export function PublicConsulta() {
                   <EmptyContent>
                     <Button
                       variant="outline"
+                      nativeButton={false}
                       render={<a href={contact} target="_blank" rel="noopener noreferrer" />}
                     >
                       <WhatsAppIcon />
@@ -277,6 +278,7 @@ function ResultCard({
           <Button
             variant="outline"
             className="public-contact"
+            nativeButton={false}
             render={<a href={contact} target="_blank" rel="noopener noreferrer" />}
           >
             <WhatsAppIcon />

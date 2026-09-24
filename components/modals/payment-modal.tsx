@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { Check } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Check, FileText, Upload, X } from 'lucide-react'
 import { Avatar, Badge, Field, Modal, MoneyInput } from '@/components/ui/kit'
 import { Button } from '@/components/ui/button'
 import { useData, useToast, useLookups, useToday } from '@/components/providers'
@@ -16,6 +16,7 @@ import {
   PAYMENT_METHODS,
 } from '@/lib/derive'
 import { formatDate, isoFromInputDate, money, parseAmount, toInputDate } from '@/lib/format'
+import { compressImage, formatFileSize, isAcceptedReceipt, MAX_RECEIPT_BYTES } from '@/lib/upload'
 import type { Installment, PaymentMethod } from '@/lib/types'
 
 function coverageOf(rows: Installment[], value: number) {
@@ -87,6 +88,16 @@ export function PaymentModal({
   const [notes, setNotes] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [receipt, setReceipt] = useState<File | null>(null)
+  const [receiptPreview, setReceiptPreview] = useState('')
+  const [receiptError, setReceiptError] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    return () => {
+      if (receiptPreview) URL.revokeObjectURL(receiptPreview)
+    }
+  }, [receiptPreview])
 
   const coverage = coverageOf(pendingInstallments, parseAmount(amount))
 
@@ -120,6 +131,31 @@ export function PaymentModal({
     setAmount(String(pending > 0 ? Math.min(sum, pending) : sum))
   }
 
+  async function handleFile(file: File | undefined | null) {
+    if (!file) return
+    setReceiptError('')
+    if (!isAcceptedReceipt(file)) {
+      setReceiptError('Formato no permitido. Usa una imagen (JPG, PNG, WebP) o un PDF.')
+      return
+    }
+    const next = file.type.startsWith('image/') ? await compressImage(file) : file
+    if (next.size > MAX_RECEIPT_BYTES) {
+      setReceiptError(`El archivo supera 5 MB (${formatFileSize(next.size)}).`)
+      return
+    }
+    if (receiptPreview) URL.revokeObjectURL(receiptPreview)
+    setReceipt(next)
+    setReceiptPreview(next.type.startsWith('image/') ? URL.createObjectURL(next) : '')
+  }
+
+  function clearReceipt() {
+    if (receiptPreview) URL.revokeObjectURL(receiptPreview)
+    setReceipt(null)
+    setReceiptPreview('')
+    setReceiptError('')
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
   async function onSave() {
     const value = parseAmount(amount)
     if (value <= 0) {
@@ -142,6 +178,7 @@ export function PaymentModal({
         method,
         reference,
         notes,
+        receipt: receipt ?? undefined,
       })
       notify('Pago registrado correctamente')
       if (onDone) onDone()
@@ -239,6 +276,71 @@ export function PaymentModal({
         <Field label="Observación">
           <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Ej. Pago recibido en visita." />
         </Field>
+
+        <div className="field">
+          <span>Comprobante (opcional)</span>
+          <div
+            className={`receipt-drop${receipt ? ' has-file' : ''}`}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault()
+              handleFile(event.dataTransfer.files?.[0])
+            }}
+            onClick={() => fileInputRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') fileInputRef.current?.click()
+            }}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,application/pdf"
+              hidden
+              onChange={(event) => handleFile(event.target.files?.[0])}
+            />
+            {receipt ? (
+              <div className="receipt-preview">
+                {receiptPreview ? (
+                  <img src={receiptPreview} alt="Comprobante" />
+                ) : (
+                  <span className="receipt-file-icon">
+                    <FileText />
+                  </span>
+                )}
+                <div>
+                  <b>{receipt.name}</b>
+                  <small>{formatFileSize(receipt.size)}</small>
+                </div>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label="Quitar comprobante"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    clearReceipt()
+                  }}
+                >
+                  <X />
+                </button>
+              </div>
+            ) : (
+              <div className="receipt-empty">
+                <Upload />
+                <div>
+                  <b>Adjuntar comprobante</b>
+                  <small>Imagen (JPG, PNG, WebP) o PDF · hasta 5 MB</small>
+                </div>
+              </div>
+            )}
+          </div>
+          {method !== 'efectivo' && !receipt && !receiptError && (
+            <small className="receipt-hint">Adjunta el comprobante de la {METHOD_LABEL[method].toLowerCase()}.</small>
+          )}
+          {receiptError && <div className="form-error">{receiptError}</div>}
+        </div>
+
         {error && <div className="form-error">{error}</div>}
       </div>
 

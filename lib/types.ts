@@ -67,6 +67,7 @@ export interface Payment extends RecordModel {
   reference: string
   notes: string
   created_by: string
+  receipt: string
 }
 
 export interface Settings extends RecordModel {
