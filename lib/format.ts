@@ -26,10 +26,13 @@ function parseDate(iso?: string | null) {
 // with the browser timezone.
 export function parseWallClock(iso?: string | null) {
   if (!iso) return null
-  const naive = String(iso)
+  let naive = String(iso)
     .trim()
     .replace(/([zZ]|[+-]\d{2}:?\d{2})$/, '')
     .replace(' ', 'T')
+  // A date-only value ("2026-09-19") must be read as a local calendar day,
+  // not as UTC midnight (which would shift the day in negative offsets).
+  if (/^\d{4}-\d{2}-\d{2}$/.test(naive)) naive += 'T00:00:00'
   const date = new Date(naive)
   return Number.isNaN(date.getTime()) ? null : date
 }

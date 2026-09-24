@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Eye, EyeOff, Loader2, LogIn, WalletCards } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/components/providers'
@@ -107,7 +108,11 @@ export function LoginForm() {
           {submitting ? 'Ingresando…' : 'Ingresar'}
         </Button>
 
-        <p className="login-footnote">Acceso reservado para operadores de Damián.</p>
+        <p className="login-footnote">
+          Acceso reservado para operadores de Damián.
+          <br />
+          ¿Eres cliente? <Link href="/consulta">Consulta tu crédito</Link>
+        </p>
       </form>
     </div>
   )
