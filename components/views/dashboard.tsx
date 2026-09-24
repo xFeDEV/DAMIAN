@@ -2,11 +2,13 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Activity, AlertTriangle, CalendarDays, CircleDollarSign, Plus, WalletCards } from 'lucide-react'
+import { Activity, AlertTriangle, Banknote, CalendarDays, CircleDollarSign, Plus, WalletCards } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, Badge, DataTable, Empty, Head, Section, Stat } from '@/components/ui/kit'
 import { LoanModal } from '@/components/modals/loan-modal'
 import { PaymentModal } from '@/components/modals/payment-modal'
+import { PaymentPicker } from '@/components/modals/payment-picker'
+import { WhatsAppButton } from '@/components/ui/whatsapp-button'
 import { useData, useLookups, useToday } from '@/components/providers'
 import {
   ACTIVITY_LABEL,
@@ -34,7 +36,7 @@ export default function DashboardView() {
   const router = useRouter()
   const { loans, installments, payments, activity } = useData()
   const { clientById } = useLookups()
-  const [modal, setModal] = useState<'loan' | 'payment' | null>(null)
+  const [modal, setModal] = useState<'loan' | 'payment' | 'picker' | null>(null)
   const [selectedLoan, setSelectedLoan] = useState('')
 
   const today = useToday()
@@ -108,10 +110,16 @@ export default function DashboardView() {
         title="Resumen de cartera"
         desc="Consulta el estado de tus préstamos y cobranza."
         action={
-          <Button onClick={() => setModal('loan')}>
-            <Plus data-icon="inline-start" />
-            Nuevo préstamo
-          </Button>
+          <div style={{ display: 'flex', gap: 9 }}>
+            <Button variant="outline" onClick={() => setModal('picker')}>
+              <Banknote data-icon="inline-start" />
+              Registrar pago
+            </Button>
+            <Button onClick={() => setModal('loan')}>
+              <Plus data-icon="inline-start" />
+              Nuevo préstamo
+            </Button>
+          </div>
         }
       />
 
@@ -171,7 +179,7 @@ export default function DashboardView() {
       </div>
 
       <div className="lower-grid">
-        <div className="card">
+        <div className="card dash-cuotas">
           <Section
             title="Cuotas en mora y de hoy"
             desc={formatLongDate(today.toISOString())}
@@ -186,10 +194,9 @@ export default function DashboardView() {
               <thead>
                 <tr>
                   <th>Cliente</th>
-                  <th>Préstamo</th>
+                  <th>Estado</th>
                   <th>Cuota</th>
                   <th>Vencimiento</th>
-                  <th>Estado</th>
                   <th></th>
                 </tr>
               </thead>
@@ -204,7 +211,9 @@ export default function DashboardView() {
                           <b>{client?.name ?? '—'}</b>
                           <small>{client?.phone}</small>
                         </td>
-                        <td>{item.number}</td>
+                        <td>
+                          <Badge status={INSTALLMENT_STATUS_LABEL[effectiveInstallmentStatus(item, today)] || 'Pendiente'} />
+                        </td>
                         <td>
                           <b>{money(item.amount)}</b>
                         </td>
@@ -212,10 +221,8 @@ export default function DashboardView() {
                           {formatDate(item.due_date)}
                           {late && <small>{daysLate(item, today)} d</small>}
                         </td>
-                        <td>
-                          <Badge status={INSTALLMENT_STATUS_LABEL[effectiveInstallmentStatus(item, today)] || 'Pendiente'} />
-                        </td>
-                        <td>
+                        <td className="row-actions">
+                          <WhatsAppButton clientId={item.client} loanId={item.loan} />
                           <button
                             className="table-action"
                             onClick={() => {
@@ -231,7 +238,7 @@ export default function DashboardView() {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={6}>
+                    <td colSpan={5}>
                       <Empty title="Sin cuotas pendientes" desc="No hay obligaciones en mora ni para hoy." />
                     </td>
                   </tr>
@@ -270,6 +277,7 @@ export default function DashboardView() {
       </div>
 
       {modal === 'loan' && <LoanModal close={() => setModal(null)} />}
+      {modal === 'picker' && <PaymentPicker close={() => setModal(null)} />}
       {modal === 'payment' && selectedLoan && (
         <PaymentModal loanId={selectedLoan} close={() => setModal(null)} />
       )}

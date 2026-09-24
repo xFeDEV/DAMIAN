@@ -78,6 +78,7 @@ export interface Settings extends RecordModel {
   allow_partial_payments: boolean
   due_reminders: boolean
   grace_days: number
+  collection_message: string
   logo: string
 }
 

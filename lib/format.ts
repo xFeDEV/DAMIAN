@@ -115,6 +115,33 @@ export function isPast(iso?: string | null) {
   return !!date && date.getTime() < Date.now()
 }
 
+export const DEFAULT_COLLECTION_MESSAGE =
+  'Hola {nombre}, le escribimos de {negocio}. Tiene {cuotas} cuota(s) en mora por {monto} del crédito {credito}. Por favor comuníquese para ponerse al día. ¡Gracias!'
+
+// Normaliza teléfonos de Colombia a formato internacional (57 + 10 dígitos).
+export function normalizePhoneCO(raw?: string | null) {
+  const digits = String(raw ?? '').replace(/\D/g, '')
+  if (!digits) return ''
+  if (digits.startsWith('57') && digits.length >= 12) return digits
+  if (digits.length === 10) return `57${digits}`
+  return digits
+}
+
+export function whatsappUrl(number?: string | null, message?: string) {
+  const digits = normalizePhoneCO(number)
+  if (!digits) return ''
+  const base = `https://wa.me/${digits}`
+  return message ? `${base}?text=${encodeURIComponent(message)}` : base
+}
+
+export function buildCollectionMessage(template: string | undefined | null, vars: Record<string, string | number>) {
+  const source = (template && template.trim()) || DEFAULT_COLLECTION_MESSAGE
+  return source.replace(/\{(\w+)\}/g, (match, key) => {
+    const value = vars[key]
+    return value === undefined || value === null ? match : String(value)
+  })
+}
+
 export function downloadCSV(filename: string, rows: (string | number)[][]) {
   const content = rows
     .map((row) =>

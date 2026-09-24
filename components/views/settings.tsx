@@ -24,6 +24,7 @@ export default function SettingsView() {
     currency: 'COP',
     allow_partial_payments: true,
     due_reminders: true,
+    collection_message: '',
   })
 
   useEffect(() => {
@@ -36,6 +37,7 @@ export default function SettingsView() {
       currency: settings.currency || 'COP',
       allow_partial_payments: Boolean(settings.allow_partial_payments),
       due_reminders: Boolean(settings.due_reminders),
+      collection_message: settings.collection_message || '',
     })
   }, [settings])
 
@@ -147,6 +149,19 @@ export default function SettingsView() {
                 </div>
                 <input type="checkbox" checked={form.due_reminders} onChange={(event) => set('due_reminders', event.target.checked)} />
               </div>
+
+              <Field label="Mensaje de cobro (WhatsApp)">
+                <textarea
+                  value={form.collection_message}
+                  onChange={(event) => set('collection_message', event.target.value)}
+                  rows={4}
+                  placeholder="Hola {nombre}, le escribimos de {negocio}..."
+                />
+              </Field>
+              <p className="center-note">
+                Variables disponibles: {'{nombre}'}, {'{negocio}'}, {'{cuotas}'}, {'{monto}'}, {'{credito}'}, {'{fecha}'}. Si lo dejas
+                vacío se usa el mensaje por defecto.
+              </p>
             </>
           )}
 

@@ -1,10 +1,11 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, CheckCircle2, CircleDollarSign, Download, Eye, WalletCards } from 'lucide-react'
+import { AlertTriangle, Banknote, CheckCircle2, CircleDollarSign, Download, Eye, WalletCards } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge, DataTable, Empty, Head, Section, Stat } from '@/components/ui/kit'
+import { PaymentModal } from '@/components/modals/payment-modal'
 import { useData, useLookups, useToday } from '@/components/providers'
 import {
   daysLate,
@@ -22,6 +23,7 @@ export default function PortfolioView() {
   const { clientById } = useLookups()
   const router = useRouter()
   const today = useToday()
+  const [payLoan, setPayLoan] = useState('')
 
   const data = useMemo(() => {
     const active = loans.filter((loan) => (Number(loan.balance) || 0) > 0)
@@ -176,6 +178,14 @@ export default function PortfolioView() {
                       <Badge status={LOAN_STATUS_LABEL[effectiveLoanStatus(loan, installments, today)] || 'Activo'} />
                     </td>
                     <td>
+                      <button
+                        className="icon-btn"
+                        onClick={() => setPayLoan(loan.id)}
+                        aria-label="Registrar pago"
+                        title="Registrar pago"
+                      >
+                        <Banknote />
+                      </button>
                       <button className="icon-btn" onClick={() => router.push(`/prestamos/${loan.id}`)}>
                         <Eye />
                       </button>
@@ -193,6 +203,8 @@ export default function PortfolioView() {
           </tbody>
         </DataTable>
       </div>
+
+      {payLoan && <PaymentModal loanId={payLoan} close={() => setPayLoan('')} />}
     </>
   )
 }

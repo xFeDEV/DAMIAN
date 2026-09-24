@@ -2,11 +2,13 @@
 
 import { useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { AlertTriangle, ChevronLeft, CircleDollarSign, CheckCircle2, Eye, Pencil, Plus, Trash2, WalletCards } from 'lucide-react'
+import { AlertTriangle, Banknote, ChevronLeft, CircleDollarSign, CheckCircle2, Eye, Pencil, Plus, Trash2, WalletCards } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, Badge, DataTable, Empty, Stat } from '@/components/ui/kit'
 import { ClientModal } from '@/components/modals/client-modal'
 import { LoanModal } from '@/components/modals/loan-modal'
+import { PaymentModal } from '@/components/modals/payment-modal'
+import { WhatsAppButton } from '@/components/ui/whatsapp-button'
 import { useAuth, useData, useLookups, useToast, useToday } from '@/components/providers'
 import {
   ACTIVITY_LABEL,
@@ -15,6 +17,7 @@ import {
   effectiveLoanStatus,
   INSTALLMENT_STATUS_LABEL,
   LOAN_STATUS_LABEL,
+  loanHasMora,
   METHOD_LABEL,
   loanProgress,
 } from '@/lib/derive'
@@ -33,6 +36,7 @@ export default function ClientDetailView() {
   const [tab, setTab] = useState<Tab>('resumen')
   const [modal, setModal] = useState<'edit' | 'loan' | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [payLoan, setPayLoan] = useState('')
 
   const client = params?.id ? clientById.get(params.id) : undefined
   const isAdmin = user?.role === 'admin'
@@ -241,7 +245,20 @@ export default function ClientDetailView() {
                     <td>
                       <Badge status={LOAN_STATUS_LABEL[effectiveLoanStatus(loan, installments, today)] || 'Activo'} />
                     </td>
-                    <td>
+                    <td className="row-actions">
+                      {loanHasMora(loan.id, installments, today) && (
+                        <WhatsAppButton clientId={loan.client} loanId={loan.id} />
+                      )}
+                      {Number(loan.balance) > 0 && (
+                        <button
+                          className="icon-btn"
+                          onClick={() => setPayLoan(loan.id)}
+                          aria-label="Registrar pago"
+                          title="Registrar pago"
+                        >
+                          <Banknote />
+                        </button>
+                      )}
                       <button className="icon-btn" onClick={() => router.push(`/prestamos/${loan.id}`)}>
                         <Eye />
                       </button>
@@ -262,6 +279,7 @@ export default function ClientDetailView() {
 
       {modal === 'edit' && <ClientModal client={client} close={() => setModal(null)} />}
       {modal === 'loan' && <LoanModal clientId={client.id} close={() => setModal(null)} />}
+      {payLoan && <PaymentModal loanId={payLoan} close={() => setPayLoan('')} />}
     </>
   )
 }

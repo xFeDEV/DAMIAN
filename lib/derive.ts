@@ -202,3 +202,40 @@ export function effectiveLoanStatus(loan: Loan, installments: Installment[], ref
   if ((Number(loan.balance) || 0) <= 0) return 'finalizado'
   return loanHasMora(loan.id, installments, reference) ? 'en_mora' : 'activo'
 }
+
+export interface InstallmentCoverage {
+  payment: Payment
+  amount: number
+}
+
+// Reparte los pagos en cascada (por número de cuota, como lo hace el hook del
+// backend) y devuelve qué pago(s) cubren cada cuota. Esto permite ver el pago
+// real de una cuota incluso cuando un pago cubre varias cuotas.
+export function paymentCoverageByInstallment(installments: Installment[], payments: Payment[]) {
+  const ordered = [...installments].sort((a, b) => a.number - b.number)
+  const orderedPayments = [...payments].sort((a, b) => {
+    const byDate = String(a.paid_at || '').localeCompare(String(b.paid_at || ''))
+    return byDate !== 0 ? byDate : String(a.created || '').localeCompare(String(b.created || ''))
+  })
+
+  const remaining = new Map(ordered.map((item) => [item.id, Number(item.amount) || 0]))
+  const coverage = new Map<string, InstallmentCoverage[]>()
+
+  for (const payment of orderedPayments) {
+    let left = Number(payment.amount) || 0
+    if (left <= 0) continue
+    for (const item of ordered) {
+      if (left <= 0) break
+      const rest = remaining.get(item.id) || 0
+      if (rest <= 0) continue
+      const applied = Math.min(rest, left)
+      remaining.set(item.id, rest - applied)
+      left -= applied
+      const list = coverage.get(item.id) ?? []
+      list.push({ payment, amount: applied })
+      coverage.set(item.id, list)
+    }
+  }
+
+  return coverage
+}

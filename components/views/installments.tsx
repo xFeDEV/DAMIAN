@@ -6,6 +6,7 @@ import { CalendarDays, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge, DataTable, Empty, Head } from '@/components/ui/kit'
 import { PaymentModal } from '@/components/modals/payment-modal'
+import { WhatsAppButton } from '@/components/ui/whatsapp-button'
 import { useData, useLookups, useToday } from '@/components/providers'
 import {
   dayKey,
@@ -169,7 +170,8 @@ export default function InstallmentsView() {
                     <td>
                       <Badge status={INSTALLMENT_STATUS_LABEL[effectiveInstallmentStatus(item, today)] || 'Pendiente'} />
                     </td>
-                    <td>
+                    <td className="row-actions">
+                      <WhatsAppButton clientId={item.client} loanId={item.loan} />
                       {installmentOutstanding(item) > 0 && (
                         <button className="table-action" onClick={() => setSelectedLoan(item.loan)}>
                           Registrar pago

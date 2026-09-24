@@ -6,6 +6,7 @@ import { Banknote, CheckCircle2, CircleDollarSign, Download, Eye, Pencil, Plus, 
 import { Button } from '@/components/ui/button'
 import { Badge, DataTable, Empty, Head, Stat } from '@/components/ui/kit'
 import { LoanModal } from '@/components/modals/loan-modal'
+import { PaymentModal } from '@/components/modals/payment-modal'
 import { useAuth, useData, useLookups, useToday } from '@/components/providers'
 import { LOAN_STATUS_LABEL, FREQUENCY_LABEL, effectiveLoanStatus, loanHasMora, loanProgress } from '@/lib/derive'
 import { downloadCSV, formatDate, money, normalize } from '@/lib/format'
@@ -27,6 +28,7 @@ export default function LoansView() {
   const [query, setQuery] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editLoan, setEditLoan] = useState<Loan | null>(null)
+  const [payLoan, setPayLoan] = useState('')
   const [filtro, setFiltro] = useState('')
 
   useEffect(() => {
@@ -186,6 +188,16 @@ export default function LoansView() {
                       <Badge status={LOAN_STATUS_LABEL[effectiveLoanStatus(loan, installments, today)] || 'Activo'} />
                     </td>
                     <td>
+                      {Number(loan.balance) > 0 && (
+                        <button
+                          className="icon-btn"
+                          onClick={() => setPayLoan(loan.id)}
+                          aria-label="Registrar pago"
+                          title="Registrar pago"
+                        >
+                          <Banknote />
+                        </button>
+                      )}
                       <button className="icon-btn" onClick={() => router.push(`/prestamos/${loan.id}`)}>
                         <Eye />
                       </button>
@@ -211,6 +223,7 @@ export default function LoansView() {
 
       {showModal && <LoanModal close={() => setShowModal(false)} />}
       {editLoan && <LoanModal loan={editLoan} close={() => setEditLoan(null)} />}
+      {payLoan && <PaymentModal loanId={payLoan} close={() => setPayLoan('')} />}
     </>
   )
 }

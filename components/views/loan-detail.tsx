@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge, DataTable, Empty, Stat } from '@/components/ui/kit'
 import { LoanModal } from '@/components/modals/loan-modal'
 import { PaymentModal } from '@/components/modals/payment-modal'
+import { PaymentDetailModal } from '@/components/modals/payment-detail'
 import { useAuth, useData, useLookups, useToast, useToday } from '@/components/providers'
 import {
   effectiveInstallmentStatus,
@@ -16,13 +17,14 @@ import {
   installmentOutstanding,
   LOAN_STATUS_LABEL,
   loanProgress,
+  paymentCoverageByInstallment,
 } from '@/lib/derive'
 import { formatDate, money } from '@/lib/format'
 
 export default function LoanDetailView() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
-  const { installments, deleteLoan } = useData()
+  const { installments, payments, deleteLoan } = useData()
   const { user } = useAuth()
   const notify = useToast()
   const { loanById, clientById } = useLookups()
@@ -31,6 +33,7 @@ export default function LoanDetailView() {
   const [paymentNumber, setPaymentNumber] = useState<number | undefined>()
   const [showEdit, setShowEdit] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [paymentDetail, setPaymentDetail] = useState<{ paymentId: string; installmentNumber: number; coveredAmount: number } | null>(null)
 
   const isAdmin = user?.role === 'admin'
   const loan = params?.id ? loanById.get(params.id) : undefined
@@ -39,6 +42,11 @@ export default function LoanDetailView() {
   const rows = useMemo(
     () => installments.filter((item) => item.loan === loan?.id).sort((a, b) => a.number - b.number),
     [installments, loan?.id],
+  )
+
+  const coverage = useMemo(
+    () => paymentCoverageByInstallment(rows, payments.filter((item) => item.loan === loan?.id)),
+    [rows, payments, loan?.id],
   )
 
   async function onDeleteLoan() {
@@ -175,39 +183,63 @@ export default function LoanDetailView() {
               <th>Pagado</th>
               <th>Saldo</th>
               <th>Estado</th>
+              <th>Pago</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {rows.length > 0 ? (
-              rows.map((item) => (
-                <tr key={item.id}>
-                  <td>#{item.number}</td>
-                  <td>{formatDate(item.due_date)}</td>
-                  <td>{money(item.amount)}</td>
-                  <td>{money(item.paid)}</td>
-                  <td>{money(Number(item.amount) - Number(item.paid))}</td>
-                  <td>
-                    <Badge status={INSTALLMENT_STATUS_LABEL[effectiveInstallmentStatus(item, today)] || 'Pendiente'} />
-                  </td>
-                  <td>
-                    {installmentOutstanding(item) > 0 && (
-                      <button
-                        className="table-action"
-                        onClick={() => {
-                          setPaymentNumber(item.number)
-                          setShowPayment(true)
-                        }}
-                      >
-                        Registrar pago
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))
+              rows.map((item) => {
+                const links = coverage.get(item.id) ?? []
+                return (
+                  <tr key={item.id}>
+                    <td>#{item.number}</td>
+                    <td>{formatDate(item.due_date)}</td>
+                    <td>{money(item.amount)}</td>
+                    <td>{money(item.paid)}</td>
+                    <td>{money(Number(item.amount) - Number(item.paid))}</td>
+                    <td>
+                      <Badge status={INSTALLMENT_STATUS_LABEL[effectiveInstallmentStatus(item, today)] || 'Pendiente'} />
+                    </td>
+                    <td>
+                      {links.length === 0
+                        ? '—'
+                        : links.map((link, index) => (
+                            <button
+                              className="link"
+                              key={`${link.payment.id}-${index}`}
+                              onClick={() =>
+                                setPaymentDetail({
+                                  paymentId: link.payment.id,
+                                  installmentNumber: item.number,
+                                  coveredAmount: link.amount,
+                                })
+                              }
+                            >
+                              {link.payment.code || 'Pago'}
+                              {index < links.length - 1 ? ', ' : ''}
+                            </button>
+                          ))}
+                    </td>
+                    <td>
+                      {installmentOutstanding(item) > 0 && (
+                        <button
+                          className="table-action"
+                          onClick={() => {
+                            setPaymentNumber(item.number)
+                            setShowPayment(true)
+                          }}
+                        >
+                          Registrar pago
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })
             ) : (
               <tr>
-                <td colSpan={7}>
+                <td colSpan={8}>
                   <Empty title="Sin cuotas" desc="Este préstamo no tiene cuotas registradas." />
                 </td>
               </tr>
@@ -220,6 +252,14 @@ export default function LoanDetailView() {
         <PaymentModal loanId={loan.id} uptoInstallmentNumber={paymentNumber} close={() => setShowPayment(false)} />
       )}
       {showEdit && <LoanModal loan={loan} close={() => setShowEdit(false)} />}
+      {paymentDetail && (
+        <PaymentDetailModal
+          paymentId={paymentDetail.paymentId}
+          installmentNumber={paymentDetail.installmentNumber}
+          coveredAmount={paymentDetail.coveredAmount}
+          close={() => setPaymentDetail(null)}
+        />
+      )}
     </>
   )
 }
