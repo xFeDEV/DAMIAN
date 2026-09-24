@@ -14,3 +14,9 @@ node_modules
 .next/
 *.tsbuildinfo
 .DS_Store
+
+# Agent / tooling artifacts
+.agents/
+.agents/skills/
+.playwright-mcp/
+skills-lock.json

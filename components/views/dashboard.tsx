@@ -7,8 +7,20 @@ import { Button } from '@/components/ui/button'
 import { Avatar, Badge, DataTable, Empty, Head, Section, Stat } from '@/components/ui/kit'
 import { LoanModal } from '@/components/modals/loan-modal'
 import { PaymentModal } from '@/components/modals/payment-modal'
-import { useData, useLookups } from '@/components/providers'
-import { ACTIVITY_LABEL, activityTone, INSTALLMENT_STATUS_LABEL, isSameDay, isSameMonth } from '@/lib/derive'
+import { useData, useLookups, useToday } from '@/components/providers'
+import {
+  ACTIVITY_LABEL,
+  activityTone,
+  dayKey,
+  daysLate,
+  effectiveInstallmentStatus,
+  INSTALLMENT_STATUS_LABEL,
+  installmentOutstanding,
+  isOverdue,
+  isSameDay,
+  isSameMonth,
+  moraTotal,
+} from '@/lib/derive'
 import { compactMoney, formatDate, formatLongDate, money, relativeTime } from '@/lib/format'
 
 const DONUT_COLORS: Record<string, string> = {
@@ -25,18 +37,16 @@ export default function DashboardView() {
   const [modal, setModal] = useState<'loan' | 'payment' | null>(null)
   const [selectedLoan, setSelectedLoan] = useState('')
 
-  const today = new Date()
+  const today = useToday()
 
   const stats = useMemo(() => {
     const activeLoans = loans.filter((loan) => loan.status !== 'finalizado')
-    const pending = installments.filter((item) => item.status !== 'pagada')
+    const pending = installments.filter((item) => installmentOutstanding(item) > 0)
     const carteraActiva = activeLoans.reduce((sum, loan) => sum + (Number(loan.balance) || 0), 0)
     const cobrarHoy = pending
       .filter((item) => isSameDay(item.due_date, today))
-      .reduce((sum, item) => sum + (Number(item.amount) - Number(item.paid) || 0), 0)
-    const vencido = installments
-      .filter((item) => item.status === 'vencida')
-      .reduce((sum, item) => sum + (Number(item.amount) - Number(item.paid) || 0), 0)
+      .reduce((sum, item) => sum + installmentOutstanding(item), 0)
+    const vencido = moraTotal(installments, today)
     const recaudadoMes = payments
       .filter((payment) => isSameMonth(payment.paid_at, today))
       .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0)
@@ -57,34 +67,16 @@ export default function DashboardView() {
   }, [payments])
 
   const portfolio = useMemo(() => {
-    let alDia = 0
-    let proxima = 0
-    let mora = 0
-    let finalizada = 0
-    for (const loan of loans) {
-      if (loan.status === 'finalizado') {
-        finalizada += Number(loan.paid_total) || 0
-        continue
-      }
-      const balance = Number(loan.balance) || 0
-      if (loan.status === 'en_mora') {
-        mora += balance
-        continue
-      }
-      const end = loan.end_at ? new Date(loan.end_at.replace(' ', 'T')).getTime() : 0
-      const soon = end > 0 && end - today.getTime() < 7 * 86_400_000
-      if (soon) proxima += balance
-      else alDia += balance
-    }
-    const total = alDia + proxima + mora + finalizada || 1
+    const activeBalance = loans.reduce((sum, loan) => sum + (Number(loan.balance) || 0), 0)
+    const mora = moraTotal(installments, today)
+    const alDia = Math.max(0, activeBalance - mora)
+    const total = activeBalance || 1
     const pct = (value: number) => Math.round((value / total) * 100)
     return [
       { label: 'Al día', value: alDia, pct: pct(alDia), tone: 'blue' },
-      { label: 'Próxima a vencer', value: proxima, pct: pct(proxima), tone: 'amber' },
       { label: 'En mora', value: mora, pct: pct(mora), tone: 'red' },
-      { label: 'Finalizada', value: finalizada, pct: pct(finalizada), tone: 'gray' },
     ]
-  }, [loans, today])
+  }, [loans, installments, today])
 
   const donut = useMemo(() => {
     const total = portfolio.reduce((sum, item) => sum + item.value, 0)
@@ -102,10 +94,12 @@ export default function DashboardView() {
   const upcoming = useMemo(
     () =>
       installments
-        .filter((item) => item.status !== 'pagada')
-        .sort((a, b) => new Date(a.due_date.replace(' ', 'T')).getTime() - new Date(b.due_date.replace(' ', 'T')).getTime())
-        .slice(0, 5),
-    [installments],
+        .filter(
+          (item) =>
+            installmentOutstanding(item) > 0 && (isOverdue(item, today) || isSameDay(item.due_date, today)),
+        )
+        .sort((a, b) => dayKey(a.due_date).localeCompare(dayKey(b.due_date))),
+    [installments, today],
   )
 
   return (
@@ -122,10 +116,22 @@ export default function DashboardView() {
       />
 
       <div className="stats-grid">
-        <Stat label="Cartera activa" value={money(stats.carteraActiva)} icon={WalletCards} />
-        <Stat label="Por cobrar hoy" value={money(stats.cobrarHoy)} icon={CalendarDays} tone="amber" />
-        <Stat label="Vencido" value={money(stats.vencido)} icon={AlertTriangle} tone="red" />
-        <Stat label="Recaudado este mes" value={money(stats.recaudadoMes)} icon={CircleDollarSign} tone="green" />
+        <Stat label="Cartera activa" value={money(stats.carteraActiva)} icon={WalletCards} href="/prestamos?filtro=activos" />
+        <Stat
+          label="Por cobrar hoy"
+          value={money(stats.cobrarHoy)}
+          icon={CalendarDays}
+          tone="amber"
+          href="/cuotas?filtro=hoy"
+        />
+        <Stat label="En mora" value={money(stats.vencido)} icon={AlertTriangle} tone="red" href="/cuotas?filtro=mora" />
+        <Stat
+          label="Recaudado este mes"
+          value={money(stats.recaudadoMes)}
+          icon={CircleDollarSign}
+          tone="green"
+          href="/pagos?filtro=mes"
+        />
       </div>
 
       <div className="dash-grid">
@@ -167,7 +173,7 @@ export default function DashboardView() {
       <div className="lower-grid">
         <div className="card">
           <Section
-            title="Próximas cuotas"
+            title="Cuotas en mora y de hoy"
             desc={formatLongDate(today.toISOString())}
             action={
               <Button variant="outline" size="sm" onClick={() => router.push('/cuotas')}>
@@ -175,58 +181,64 @@ export default function DashboardView() {
               </Button>
             }
           />
-          <DataTable>
-            <thead>
-              <tr>
-                <th>Cliente</th>
-                <th>Préstamo</th>
-                <th>Cuota</th>
-                <th>Vencimiento</th>
-                <th>Estado</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {upcoming.length > 0 ? (
-                upcoming.map((item) => {
-                  const client = clientById.get(item.client)
-                  return (
-                    <tr key={item.id}>
-                      <td>
-                        <b>{client?.name ?? '—'}</b>
-                        <small>{client?.phone}</small>
-                      </td>
-                      <td>{item.number}</td>
-                      <td>
-                        <b>{money(item.amount)}</b>
-                      </td>
-                      <td>{formatDate(item.due_date)}</td>
-                      <td>
-                        <Badge status={INSTALLMENT_STATUS_LABEL[item.status] || 'Pendiente'} />
-                      </td>
-                      <td>
-                        <button
-                          className="table-action"
-                          onClick={() => {
-                            setSelectedLoan(item.loan)
-                            setModal('payment')
-                          }}
-                        >
-                          Registrar pago
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })
-              ) : (
+          <div className="table-scroll">
+            <DataTable>
+              <thead>
                 <tr>
-                  <td colSpan={6}>
-                    <Empty title="Sin cuotas pendientes" desc="No hay obligaciones por cobrar." />
-                  </td>
+                  <th>Cliente</th>
+                  <th>Préstamo</th>
+                  <th>Cuota</th>
+                  <th>Vencimiento</th>
+                  <th>Estado</th>
+                  <th></th>
                 </tr>
-              )}
-            </tbody>
-          </DataTable>
+              </thead>
+              <tbody>
+                {upcoming.length > 0 ? (
+                  upcoming.map((item) => {
+                    const client = clientById.get(item.client)
+                    const late = isOverdue(item, today)
+                    return (
+                      <tr key={item.id}>
+                        <td>
+                          <b>{client?.name ?? '—'}</b>
+                          <small>{client?.phone}</small>
+                        </td>
+                        <td>{item.number}</td>
+                        <td>
+                          <b>{money(item.amount)}</b>
+                        </td>
+                        <td>
+                          {formatDate(item.due_date)}
+                          {late && <small>{daysLate(item, today)} d</small>}
+                        </td>
+                        <td>
+                          <Badge status={INSTALLMENT_STATUS_LABEL[effectiveInstallmentStatus(item, today)] || 'Pendiente'} />
+                        </td>
+                        <td>
+                          <button
+                            className="table-action"
+                            onClick={() => {
+                              setSelectedLoan(item.loan)
+                              setModal('payment')
+                            }}
+                          >
+                            Registrar pago
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={6}>
+                      <Empty title="Sin cuotas pendientes" desc="No hay obligaciones en mora ni para hoy." />
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </DataTable>
+          </div>
         </div>
 
         <div className="card activity">

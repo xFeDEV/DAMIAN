@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import Link from 'next/link'
 import { ArrowUpRight, FileText, X } from 'lucide-react'
 import { badgeTone } from '@/lib/derive'
 import { formatAmountInput, initials, parseAmount } from '@/lib/format'
@@ -25,15 +26,17 @@ export function Stat({
   icon: Icon,
   tone = 'blue',
   change,
+  href,
 }: {
   label: string
   value: string
   icon: React.ComponentType<{ className?: string }>
   tone?: 'blue' | 'amber' | 'red' | 'green'
   change?: string
+  href?: string
 }) {
-  return (
-    <div className="stat">
+  const content = (
+    <>
       <div className={`stat-icon ${tone}`}>
         <Icon />
       </div>
@@ -46,8 +49,18 @@ export function Stat({
           </em>
         )}
       </div>
-    </div>
+    </>
   )
+
+  if (href) {
+    return (
+      <Link className="stat clickable" href={href}>
+        {content}
+      </Link>
+    )
+  }
+
+  return <div className="stat">{content}</div>
 }
 
 export function Head({ title, desc, action }: { title: string; desc?: string; action?: React.ReactNode }) {

@@ -244,6 +244,35 @@ function DataProvider({ children }: { children: React.ReactNode }) {
     }
   }, [ready, user, fetchAll])
 
+  // Realtime: una sola conexión SSE multiplexada. Ante cambios de otro equipo
+  // (u operador), se refresca con debounce para no generar una petición por evento.
+  useEffect(() => {
+    if (!ready || !user) return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const schedule = () => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        fetchAll().catch(() => {})
+      }, 400)
+    }
+    const unsubscribers: (() => void)[] = []
+    const subscriptions = ['payments', 'loans', 'installments', 'activity_log'].map((collection) =>
+      pb.collection(collection).subscribe('*', schedule),
+    )
+    Promise.all(subscriptions)
+      .then((fns) => {
+        if (cancelled) fns.forEach((unsubscribe) => unsubscribe())
+        else unsubscribers.push(...fns)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+      unsubscribers.forEach((unsubscribe) => unsubscribe())
+    }
+  }, [ready, user, fetchAll])
+
   const createClient = useCallback(
     async (input: ClientInput) => {
       const code = computeNextCode('CL', data.clients.map((item) => item.code))
@@ -468,6 +497,33 @@ export function useLookups() {
     }),
     [clients, loans],
   )
+}
+
+// "Hoy" como fecha calendario. Los estados de mora son por día, así que basta
+// con refrescar cuando cambia el día (o al recuperar el foco), sin peticiones.
+export function useToday() {
+  const [today, setToday] = useState(() => new Date())
+
+  useEffect(() => {
+    const check = () => {
+      const now = new Date()
+      setToday((prev) =>
+        prev.getFullYear() === now.getFullYear() && prev.getMonth() === now.getMonth() && prev.getDate() === now.getDate()
+          ? prev
+          : now,
+      )
+    }
+    const interval = setInterval(check, 30_000)
+    window.addEventListener('focus', check)
+    document.addEventListener('visibilitychange', check)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', check)
+      document.removeEventListener('visibilitychange', check)
+    }
+  }, [])
+
+  return today
 }
 
 const INITIAL_PAYMENT_NOTE = 'Saldo inicial (cuota ya pagada al registrar el crédito)'

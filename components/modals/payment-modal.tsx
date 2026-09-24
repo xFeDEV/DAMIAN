@@ -4,8 +4,17 @@ import { useMemo, useState } from 'react'
 import { Check } from 'lucide-react'
 import { Avatar, Badge, Field, Modal, MoneyInput } from '@/components/ui/kit'
 import { Button } from '@/components/ui/button'
-import { useData, useToast, useLookups } from '@/components/providers'
-import { INSTALLMENT_STATUS_LABEL, LOAN_STATUS_LABEL, METHOD_LABEL, PAYMENT_METHODS } from '@/lib/derive'
+import { useData, useToast, useLookups, useToday } from '@/components/providers'
+import {
+  effectiveInstallmentStatus,
+  effectiveLoanStatus,
+  INSTALLMENT_STATUS_LABEL,
+  installmentOutstanding,
+  isOverdue,
+  LOAN_STATUS_LABEL,
+  METHOD_LABEL,
+  PAYMENT_METHODS,
+} from '@/lib/derive'
 import { formatDate, isoFromInputDate, money, parseAmount, toInputDate } from '@/lib/format'
 import type { Installment, PaymentMethod } from '@/lib/types'
 
@@ -46,6 +55,7 @@ export function PaymentModal({
   const { installments, registerPayment } = useData()
   const { loanById, clientById } = useLookups()
   const notify = useToast()
+  const today = useToday()
 
   const loan = loanById.get(loanId)
   const client = loan ? clientById.get(loan.client) : undefined
@@ -53,7 +63,7 @@ export function PaymentModal({
   const pendingInstallments = useMemo(
     () =>
       installments
-        .filter((item) => item.loan === loanId && item.status !== 'pagada')
+        .filter((item) => item.loan === loanId && installmentOutstanding(item) > 0)
         .sort((a, b) => a.number - b.number),
     [installments, loanId],
   )
@@ -103,10 +113,10 @@ export function PaymentModal({
   }
 
   function applyOverdue() {
-    const overdue = pendingInstallments.filter((item) => item.status === 'vencida')
+    const overdue = pendingInstallments.filter((item) => isOverdue(item, today))
     if (overdue.length === 0) return
     setCuotasInput(String(overdue.length))
-    const sum = overdue.reduce((total, item) => total + (Number(item.amount) || 0), 0)
+    const sum = overdue.reduce((total, item) => total + installmentOutstanding(item), 0)
     setAmount(String(pending > 0 ? Math.min(sum, pending) : sum))
   }
 
@@ -153,7 +163,13 @@ export function PaymentModal({
             {loan.code} {target ? `· Cuota #${target.number}` : ''}
           </span>
         </div>
-        <Badge status={target ? INSTALLMENT_STATUS_LABEL[target.status] : LOAN_STATUS_LABEL[loan.status]} />
+        <Badge
+          status={
+            target
+              ? INSTALLMENT_STATUS_LABEL[effectiveInstallmentStatus(target, today)]
+              : LOAN_STATUS_LABEL[effectiveLoanStatus(loan, installments, today)]
+          }
+        />
       </div>
 
       <div className="due-box">

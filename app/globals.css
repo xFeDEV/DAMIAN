@@ -60,3 +60,6 @@
 .theme-toggle span{display:grid;place-items:center}
 .theme-toggle .only-dark,.dark .theme-toggle .only-light{display:none}
 .theme-toggle .only-light,.dark .theme-toggle .only-dark{display:grid}
+.stat.clickable{cursor:pointer;text-decoration:none;color:inherit;transition:border-color .15s,box-shadow .15s}.stat.clickable:hover{border-color:var(--accent);box-shadow:0 2px 10px var(--shadow-soft)}
+.pill-filter{display:inline-flex;align-items:center;gap:8px;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600;margin:0 15px 4px}
+.table-scroll{max-height:420px;overflow-y:auto}

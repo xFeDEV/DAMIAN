@@ -24,7 +24,6 @@ export default function SettingsView() {
     currency: 'COP',
     allow_partial_payments: true,
     due_reminders: true,
-    grace_days: 0,
   })
 
   useEffect(() => {
@@ -37,7 +36,6 @@ export default function SettingsView() {
       currency: settings.currency || 'COP',
       allow_partial_payments: Boolean(settings.allow_partial_payments),
       due_reminders: Boolean(settings.due_reminders),
-      grace_days: Number(settings.grace_days) || 0,
     })
   }, [settings])
 
@@ -148,18 +146,6 @@ export default function SettingsView() {
                   <span>Mostrar alertas para cuotas próximas a vencer.</span>
                 </div>
                 <input type="checkbox" checked={form.due_reminders} onChange={(event) => set('due_reminders', event.target.checked)} />
-              </div>
-              <div className="setting-row">
-                <div>
-                  <b>Días de gracia</b>
-                  <span>Periodo antes de marcar una cuota como vencida.</span>
-                </div>
-                <select value={form.grace_days} onChange={(event) => set('grace_days', Number(event.target.value))}>
-                  <option value={0}>Sin días de gracia</option>
-                  <option value={1}>1 día</option>
-                  <option value={3}>3 días</option>
-                  <option value={7}>7 días</option>
-                </select>
               </div>
             </>
           )}

@@ -1,4 +1,4 @@
-import type { Installment, Loan, Payment } from './types'
+import type { Installment, InstallmentStatus, Loan, LoanStatus, Payment } from './types'
 import { parseWallClock } from './format'
 
 export type Tone = 'good' | 'warn' | 'bad' | 'muted'
@@ -13,7 +13,7 @@ export const LOAN_STATUS_LABEL: Record<string, string> = {
 export const INSTALLMENT_STATUS_LABEL: Record<string, string> = {
   pendiente: 'Pendiente',
   parcial: 'Parcial',
-  vencida: 'Vencida',
+  vencida: 'En mora',
   pagada: 'Pagada',
 }
 
@@ -78,11 +78,9 @@ export function loanProgress(loan: Loan) {
   return Math.max(0, Math.min(1, (Number(loan.paid_total) || 0) / total))
 }
 
-export function clientStatus(loans: Loan[], installments: Installment[]) {
+export function clientStatus(loans: Loan[], installments: Installment[], reference = new Date()) {
   if (loans.length === 0) return 'Sin préstamos'
-  const hasOverdue =
-    loans.some((loan) => loan.status === 'en_mora') || installments.some((item) => item.status === 'vencida')
-  return hasOverdue ? 'En mora' : 'Al día'
+  return overdueInstallments(installments, reference).length > 0 ? 'En mora' : 'Al día'
 }
 
 export interface ClientStats {
@@ -95,19 +93,19 @@ export interface ClientStats {
   totalLoans: number
 }
 
-export function clientStats(loans: Loan[], installments: Installment[]): ClientStats {
+export function clientStats(loans: Loan[], installments: Installment[], reference = new Date()): ClientStats {
   const active = loans.filter((loan) => loan.status !== 'finalizado')
   const pendingInstallments = installments
-    .filter((item) => item.status !== 'pagada')
+    .filter((item) => installmentOutstanding(item) > 0)
     .sort((a, b) => new Date(a.due_date.replace(' ', 'T')).getTime() - new Date(b.due_date.replace(' ', 'T')).getTime())
 
   return {
     activeLoans: active.length,
     balance: active.reduce((sum, loan) => sum + (Number(loan.balance) || 0), 0),
     paid: loans.reduce((sum, loan) => sum + (Number(loan.paid_total) || 0), 0),
-    overdue: installments.filter((item) => item.status === 'vencida').length,
+    overdue: overdueInstallments(installments, reference).length,
     next: pendingInstallments[0]?.due_date || '',
-    status: clientStatus(loans, installments),
+    status: clientStatus(loans, installments, reference),
     totalLoans: loans.length,
   }
 }
@@ -144,4 +142,63 @@ export function isSameDay(iso: string, reference = new Date()) {
     date.getMonth() === reference.getMonth() &&
     date.getDate() === reference.getDate()
   )
+}
+
+/* ------------------------- Mora (por fecha) ------------------------- */
+
+// Una cuota está en mora cuando su fecha de vencimiento (día calendario) ya
+// pasó y todavía tiene saldo. Regla única para toda la app.
+function dayKeyFromDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+export function dayKey(iso?: string | null) {
+  const date = parseWallClock(iso)
+  return date ? dayKeyFromDate(date) : ''
+}
+
+export function todayKey(reference = new Date()) {
+  return dayKeyFromDate(reference)
+}
+
+export function installmentOutstanding(item: Installment) {
+  return Math.max(0, (Number(item.amount) || 0) - (Number(item.paid) || 0))
+}
+
+export function isOverdue(item: Installment, reference = new Date()) {
+  if (installmentOutstanding(item) <= 0) return false
+  const key = dayKey(item.due_date)
+  return key !== '' && key < todayKey(reference)
+}
+
+export function daysLate(item: Installment, reference = new Date()) {
+  const due = parseWallClock(item.due_date)
+  if (!due) return 0
+  const from = new Date(due.getFullYear(), due.getMonth(), due.getDate())
+  const to = new Date(reference.getFullYear(), reference.getMonth(), reference.getDate())
+  return Math.max(0, Math.round((to.getTime() - from.getTime()) / 86_400_000))
+}
+
+export function overdueInstallments(installments: Installment[], reference = new Date()) {
+  return installments.filter((item) => isOverdue(item, reference))
+}
+
+export function moraTotal(installments: Installment[], reference = new Date()) {
+  return overdueInstallments(installments, reference).reduce((sum, item) => sum + installmentOutstanding(item), 0)
+}
+
+export function loanHasMora(loanId: string, installments: Installment[], reference = new Date()) {
+  return installments.some((item) => item.loan === loanId && isOverdue(item, reference))
+}
+
+export function effectiveInstallmentStatus(item: Installment, reference = new Date()): InstallmentStatus {
+  if (installmentOutstanding(item) <= 0) return 'pagada'
+  if (isOverdue(item, reference)) return 'vencida'
+  if ((Number(item.paid) || 0) > 0) return 'parcial'
+  return 'pendiente'
+}
+
+export function effectiveLoanStatus(loan: Loan, installments: Installment[], reference = new Date()): LoanStatus {
+  if ((Number(loan.balance) || 0) <= 0) return 'finalizado'
+  return loanHasMora(loan.id, installments, reference) ? 'en_mora' : 'activo'
 }

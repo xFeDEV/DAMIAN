@@ -4,13 +4,14 @@ import { useMemo } from 'react'
 import { Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Head, Section } from '@/components/ui/kit'
-import { useData, useToast } from '@/components/providers'
-import { isSameDay } from '@/lib/derive'
+import { useData, useToast, useToday } from '@/components/providers'
+import { isSameDay, loanHasMora, moraTotal } from '@/lib/derive'
 import { compactMoney, downloadCSV, formatDate, money } from '@/lib/format'
 
 export default function ReportsView() {
-  const { loans, payments } = useData()
+  const { loans, installments, payments } = useData()
   const notify = useToast()
+  const today = useToday()
 
   const report = useMemo(() => {
     const days = Array.from({ length: 15 }, (_, index) => {
@@ -23,20 +24,15 @@ export default function ReportsView() {
     )
     const max = Math.max(1, ...daily)
 
-    const active = loans.filter((loan) => loan.status !== 'finalizado')
-    const overdue = loans.filter((loan) => loan.status === 'en_mora')
+    const active = loans.filter((loan) => (Number(loan.balance) || 0) > 0)
+    const activeBalance = active.reduce((sum, loan) => sum + (Number(loan.balance) || 0), 0)
+    const mora = moraTotal(installments, today)
+    const overdue = active.filter((loan) => loanHasMora(loan.id, installments, today))
+    const finalized = loans.reduce((sum, loan) => (loan.status === 'finalizado' ? sum + (Number(loan.paid_total) || 0) : sum), 0)
     const byStatus = [
-      {
-        label: 'Al día',
-        value: active.filter((loan) => loan.status !== 'en_mora').reduce((sum, loan) => sum + (Number(loan.balance) || 0), 0),
-        tone: 'blue',
-      },
-      { label: 'Vencida', value: overdue.reduce((sum, loan) => sum + (Number(loan.balance) || 0), 0), tone: 'red' },
-      {
-        label: 'Finalizada',
-        value: loans.filter((loan) => loan.status === 'finalizado').reduce((sum, loan) => sum + (Number(loan.paid_total) || 0), 0),
-        tone: 'gray',
-      },
+      { label: 'Al día', value: Math.max(0, activeBalance - mora), tone: 'blue' },
+      { label: 'En mora', value: mora, tone: 'red' },
+      { label: 'Recaudado histórico', value: finalized, tone: 'gray' },
     ]
     const total = byStatus.reduce((sum, item) => sum + item.value, 0) || 1
 
@@ -48,9 +44,9 @@ export default function ReportsView() {
       byStatus: byStatus.map((item) => ({ ...item, pct: Math.round((item.value / total) * 100) })),
       activeCount: active.length,
       overdueClients: new Set(overdue.map((loan) => loan.client)).size,
-      overdueBalance: overdue.reduce((sum, loan) => sum + (Number(loan.balance) || 0), 0),
+      overdueBalance: mora,
     }
-  }, [loans, payments])
+  }, [loans, installments, payments, today])
 
   function exportReport() {
     downloadCSV(
@@ -117,7 +113,7 @@ export default function ReportsView() {
           <strong className="danger">
             {report.overdueClients} <small>clientes</small>
           </strong>
-          <p>{money(report.overdueBalance)} en saldo vencido</p>
+          <p>{money(report.overdueBalance)} en mora</p>
         </div>
       </div>
     </>

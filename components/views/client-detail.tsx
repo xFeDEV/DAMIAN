@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button'
 import { Avatar, Badge, DataTable, Empty, Stat } from '@/components/ui/kit'
 import { ClientModal } from '@/components/modals/client-modal'
 import { LoanModal } from '@/components/modals/loan-modal'
-import { useAuth, useData, useLookups, useToast } from '@/components/providers'
+import { useAuth, useData, useLookups, useToast, useToday } from '@/components/providers'
 import {
   ACTIVITY_LABEL,
   activityTone,
   clientStats,
+  effectiveLoanStatus,
   INSTALLMENT_STATUS_LABEL,
   LOAN_STATUS_LABEL,
   METHOD_LABEL,
@@ -28,6 +29,7 @@ export default function ClientDetailView() {
   const { clientById } = useLookups()
   const { user } = useAuth()
   const notify = useToast()
+  const today = useToday()
   const [tab, setTab] = useState<Tab>('resumen')
   const [modal, setModal] = useState<'edit' | 'loan' | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -41,8 +43,8 @@ export default function ClientDetailView() {
     const clientInstallments = installments.filter((item) => item.client === client.id)
     const clientPayments = payments.filter((payment) => payment.client === client.id)
     const clientActivity = activity.filter((item) => item.client === client.id)
-    return { clientLoans, clientInstallments, clientPayments, clientActivity, stats: clientStats(clientLoans, clientInstallments) }
-  }, [client, loans, installments, payments, activity])
+    return { clientLoans, clientInstallments, clientPayments, clientActivity, stats: clientStats(clientLoans, clientInstallments, today) }
+  }, [client, loans, installments, payments, activity, today])
 
   if (!client || !data) {
     return (
@@ -137,7 +139,7 @@ export default function ClientDetailView() {
         <Stat label="Préstamos activos" value={String(stats.activeLoans)} icon={WalletCards} />
         <Stat label="Saldo pendiente" value={money(stats.balance)} icon={CircleDollarSign} tone="amber" />
         <Stat label="Total pagado" value={money(stats.paid)} icon={CheckCircle2} tone="green" />
-        <Stat label="Cuotas vencidas" value={String(stats.overdue)} icon={AlertTriangle} tone="red" />
+        <Stat label="Cuotas en mora" value={String(stats.overdue)} icon={AlertTriangle} tone="red" />
       </div>
 
       <div className="card">
@@ -237,7 +239,7 @@ export default function ClientDetailView() {
                       <small>{Math.round(loanProgress(loan) * 100)}%</small>
                     </td>
                     <td>
-                      <Badge status={LOAN_STATUS_LABEL[loan.status] || 'Activo'} />
+                      <Badge status={LOAN_STATUS_LABEL[effectiveLoanStatus(loan, installments, today)] || 'Activo'} />
                     </td>
                     <td>
                       <button className="icon-btn" onClick={() => router.push(`/prestamos/${loan.id}`)}>

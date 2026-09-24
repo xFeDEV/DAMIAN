@@ -1,24 +1,38 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Banknote, CheckCircle2, CircleDollarSign, Download, Eye, Pencil, Plus, Search, WalletCards } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge, DataTable, Empty, Head, Stat } from '@/components/ui/kit'
 import { LoanModal } from '@/components/modals/loan-modal'
-import { useAuth, useData, useLookups } from '@/components/providers'
-import { LOAN_STATUS_LABEL, FREQUENCY_LABEL, loanProgress } from '@/lib/derive'
+import { useAuth, useData, useLookups, useToday } from '@/components/providers'
+import { LOAN_STATUS_LABEL, FREQUENCY_LABEL, effectiveLoanStatus, loanHasMora, loanProgress } from '@/lib/derive'
 import { downloadCSV, formatDate, money, normalize } from '@/lib/format'
 import type { Loan } from '@/lib/types'
 
+const LOAN_FILTERS: Record<string, string> = {
+  activos: 'Préstamos activos',
+  aldia: 'Al día',
+  mora: 'En mora',
+  finalizados: 'Finalizados',
+}
+
 export default function LoansView() {
-  const { loans } = useData()
+  const { loans, installments } = useData()
   const { user } = useAuth()
   const { clientById } = useLookups()
   const router = useRouter()
+  const today = useToday()
   const [query, setQuery] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editLoan, setEditLoan] = useState<Loan | null>(null)
+  const [filtro, setFiltro] = useState('')
+
+  useEffect(() => {
+    const value = new URLSearchParams(window.location.search).get('filtro')
+    if (value) setFiltro(value)
+  }, [])
 
   const isAdmin = user?.role === 'admin'
 
@@ -33,13 +47,20 @@ export default function LoansView() {
   }, [loans])
 
   const filtered = useMemo(() => {
+    let base = loans
+    if (filtro === 'activos') base = loans.filter((loan) => (Number(loan.balance) || 0) > 0)
+    else if (filtro === 'finalizados') base = loans.filter((loan) => (Number(loan.balance) || 0) <= 0)
+    else if (filtro === 'aldia')
+      base = loans.filter((loan) => (Number(loan.balance) || 0) > 0 && !loanHasMora(loan.id, installments, today))
+    else if (filtro === 'mora') base = loans.filter((loan) => loanHasMora(loan.id, installments, today))
+
     const term = normalize(query.trim())
-    if (!term) return loans
-    return loans.filter((loan) => {
+    if (!term) return base
+    return base.filter((loan) => {
       const client = clientById.get(loan.client)
       return normalize(`${loan.code} ${client?.name ?? ''}`).includes(term)
     })
-  }, [loans, query, clientById])
+  }, [loans, installments, today, filtro, query, clientById])
 
   function exportCSV() {
     downloadCSV(
@@ -54,7 +75,7 @@ export default function LoansView() {
           loan.installment_amount,
           FREQUENCY_LABEL[loan.frequency] || '',
           loan.balance,
-          LOAN_STATUS_LABEL[loan.status] || '',
+          LOAN_STATUS_LABEL[effectiveLoanStatus(loan, installments, today)] || '',
         ]),
       ],
     )
@@ -74,10 +95,27 @@ export default function LoansView() {
       />
 
       <div className="stats-grid">
-        <Stat label="Total prestado" value={money(stats.total)} icon={Banknote} />
-        <Stat label="Préstamos activos" value={String(stats.activeCount)} icon={WalletCards} />
-        <Stat label="Por cobrar" value={money(stats.pending)} icon={CircleDollarSign} tone="amber" />
-        <Stat label="Finalizados" value={String(stats.finished)} icon={CheckCircle2} tone="green" />
+        <Stat label="Total prestado" value={money(stats.total)} icon={Banknote} href="/prestamos" />
+        <Stat
+          label="Préstamos activos"
+          value={String(stats.activeCount)}
+          icon={WalletCards}
+          href="/prestamos?filtro=activos"
+        />
+        <Stat
+          label="Por cobrar"
+          value={money(stats.pending)}
+          icon={CircleDollarSign}
+          tone="amber"
+          href="/prestamos?filtro=activos"
+        />
+        <Stat
+          label="Finalizados"
+          value={String(stats.finished)}
+          icon={CheckCircle2}
+          tone="green"
+          href="/prestamos?filtro=finalizados"
+        />
       </div>
 
       <div className="card">
@@ -91,6 +129,15 @@ export default function LoansView() {
             Exportar
           </Button>
         </div>
+
+        {LOAN_FILTERS[filtro] && (
+          <span className="pill-filter">
+            {LOAN_FILTERS[filtro]} · {filtered.length}
+            <button className="link" onClick={() => setFiltro('')}>
+              Quitar filtro
+            </button>
+          </span>
+        )}
 
         <DataTable>
           <thead>
@@ -136,7 +183,7 @@ export default function LoansView() {
                       <b>{money(loan.balance)}</b>
                     </td>
                     <td>
-                      <Badge status={LOAN_STATUS_LABEL[loan.status] || 'Activo'} />
+                      <Badge status={LOAN_STATUS_LABEL[effectiveLoanStatus(loan, installments, today)] || 'Activo'} />
                     </td>
                     <td>
                       <button className="icon-btn" onClick={() => router.push(`/prestamos/${loan.id}`)}>

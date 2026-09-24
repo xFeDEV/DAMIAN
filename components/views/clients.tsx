@@ -6,7 +6,7 @@ import { Download, Filter, MoreHorizontal, Plus, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, Badge, DataTable, Empty, Head } from '@/components/ui/kit'
 import { ClientModal } from '@/components/modals/client-modal'
-import { useData } from '@/components/providers'
+import { useData, useToday } from '@/components/providers'
 import { clientStats } from '@/lib/derive'
 import { downloadCSV, formatDate, money, normalize } from '@/lib/format'
 
@@ -22,6 +22,7 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 export default function ClientsView() {
   const { clients, loans, installments } = useData()
   const router = useRouter()
+  const today = useToday()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<FilterKey>('all')
   const [showModal, setShowModal] = useState(false)
@@ -31,9 +32,9 @@ export default function ClientsView() {
       clients.map((client) => {
         const clientLoans = loans.filter((loan) => loan.client === client.id)
         const clientInstallments = installments.filter((item) => item.client === client.id)
-        return { client, stats: clientStats(clientLoans, clientInstallments) }
+        return { client, stats: clientStats(clientLoans, clientInstallments, today) }
       }),
-    [clients, loans, installments],
+    [clients, loans, installments, today],
   )
 
   const filtered = useMemo(() => {

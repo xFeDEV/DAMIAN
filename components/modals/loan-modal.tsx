@@ -6,7 +6,7 @@ import { Check, ChevronDown, Search } from 'lucide-react'
 import { Badge, Field, Modal, MoneyInput } from '@/components/ui/kit'
 import { Button } from '@/components/ui/button'
 import { useData, useToast, type InstallmentInput, type LoanInput } from '@/components/providers'
-import { INSTALLMENT_STATUS_LABEL, FREQUENCIES, FREQUENCY_DAYS, FREQUENCY_LABEL } from '@/lib/derive'
+import { INSTALLMENT_STATUS_LABEL, FREQUENCIES, FREQUENCY_DAYS, FREQUENCY_LABEL, installmentOutstanding, isOverdue } from '@/lib/derive'
 import { formatDate, isoFromInputDate, money, normalize, parseAmount, toInputDate } from '@/lib/format'
 import type { Loan, LoanFrequency, LoanStatus } from '@/lib/types'
 
@@ -63,11 +63,13 @@ export function LoanModal({
   const [disbursed, setDisbursed] = useState(loan ? toInputDate(loan.disbursed_at) : toInputDate())
   const [nextDue, setNextDue] = useState(() => {
     if (!loan) return toInputDate()
-    const pending = loanInstallments.find((item) => item.status !== 'pagada')
+    const pending = loanInstallments.find((item) => installmentOutstanding(item) > 0)
     return pending ? toInputDate(pending.due_date) : toInputDate(loan.end_at)
   })
-  const [paidCount, setPaidCount] = useState(String(loanInstallments.filter((item) => item.status === 'pagada').length))
-  const [loanState, setLoanState] = useState<LoanStatus>(loan?.status === 'en_mora' ? 'en_mora' : 'activo')
+  const [paidCount, setPaidCount] = useState(String(loanInstallments.filter((item) => installmentOutstanding(item) <= 0).length))
+  const [loanState, setLoanState] = useState<LoanStatus>(
+    loan && loanInstallments.some((item) => isOverdue(item)) ? 'en_mora' : 'activo',
+  )
   const [pickerQuery, setPickerQuery] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)

@@ -7,8 +7,16 @@ import { Button } from '@/components/ui/button'
 import { Badge, DataTable, Empty, Stat } from '@/components/ui/kit'
 import { LoanModal } from '@/components/modals/loan-modal'
 import { PaymentModal } from '@/components/modals/payment-modal'
-import { useAuth, useData, useLookups, useToast } from '@/components/providers'
-import { FREQUENCY_LABEL, INSTALLMENT_STATUS_LABEL, LOAN_STATUS_LABEL, loanProgress } from '@/lib/derive'
+import { useAuth, useData, useLookups, useToast, useToday } from '@/components/providers'
+import {
+  effectiveInstallmentStatus,
+  effectiveLoanStatus,
+  FREQUENCY_LABEL,
+  INSTALLMENT_STATUS_LABEL,
+  installmentOutstanding,
+  LOAN_STATUS_LABEL,
+  loanProgress,
+} from '@/lib/derive'
 import { formatDate, money } from '@/lib/format'
 
 export default function LoanDetailView() {
@@ -18,6 +26,7 @@ export default function LoanDetailView() {
   const { user } = useAuth()
   const notify = useToast()
   const { loanById, clientById } = useLookups()
+  const today = useToday()
   const [showPayment, setShowPayment] = useState(false)
   const [paymentNumber, setPaymentNumber] = useState<number | undefined>()
   const [showEdit, setShowEdit] = useState(false)
@@ -72,7 +81,7 @@ export default function LoanDetailView() {
           </button>
           <div className="title-line">
             <h1>Préstamo {loan.code}</h1>
-            <Badge status={LOAN_STATUS_LABEL[loan.status] || 'Activo'} />
+            <Badge status={LOAN_STATUS_LABEL[effectiveLoanStatus(loan, rows, today)] || 'Activo'} />
           </div>
           <p>
             Cliente:{' '}
@@ -179,10 +188,10 @@ export default function LoanDetailView() {
                   <td>{money(item.paid)}</td>
                   <td>{money(Number(item.amount) - Number(item.paid))}</td>
                   <td>
-                    <Badge status={INSTALLMENT_STATUS_LABEL[item.status] || 'Pendiente'} />
+                    <Badge status={INSTALLMENT_STATUS_LABEL[effectiveInstallmentStatus(item, today)] || 'Pendiente'} />
                   </td>
                   <td>
-                    {item.status !== 'pagada' && (
+                    {installmentOutstanding(item) > 0 && (
                       <button
                         className="table-action"
                         onClick={() => {

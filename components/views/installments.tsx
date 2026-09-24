@@ -1,48 +1,56 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CalendarDays, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge, DataTable, Empty, Head } from '@/components/ui/kit'
 import { PaymentModal } from '@/components/modals/payment-modal'
-import { useData, useLookups } from '@/components/providers'
-import { INSTALLMENT_STATUS_LABEL, isSameDay } from '@/lib/derive'
+import { useData, useLookups, useToday } from '@/components/providers'
+import {
+  dayKey,
+  effectiveInstallmentStatus,
+  INSTALLMENT_STATUS_LABEL,
+  installmentOutstanding,
+  isOverdue,
+  isSameDay,
+  todayKey,
+} from '@/lib/derive'
 import { downloadCSV, formatDate, money, normalize } from '@/lib/format'
 import type { Installment } from '@/lib/types'
 
-type Tab = 'hoy' | 'manana' | 'vencidas' | 'proximas'
-
-function startOfDay(date: Date) {
-  const copy = new Date(date)
-  copy.setHours(0, 0, 0, 0)
-  return copy.getTime()
-}
+type Tab = 'hoy' | 'manana' | 'mora' | 'proximas'
+const TABS: Tab[] = ['hoy', 'manana', 'mora', 'proximas']
 
 export default function InstallmentsView() {
   const { installments } = useData()
   const { clientById, loanById } = useLookups()
   const router = useRouter()
+  const today = useToday()
   const [tab, setTab] = useState<Tab>('hoy')
   const [query, setQuery] = useState('')
   const [selectedLoan, setSelectedLoan] = useState('')
 
-  const tomorrow = useMemo(() => {
-    const date = new Date()
-    date.setDate(date.getDate() + 1)
-    return date
+  useEffect(() => {
+    const value = new URLSearchParams(window.location.search).get('filtro') as Tab | null
+    if (value && TABS.includes(value)) setTab(value)
   }, [])
 
+  const tomorrow = useMemo(() => {
+    const date = new Date(today)
+    date.setDate(date.getDate() + 1)
+    return date
+  }, [today])
+
   const buckets = useMemo(() => {
-    const todayStart = startOfDay(new Date())
-    const pending = installments.filter((item) => item.status !== 'pagada')
+    const pending = installments.filter((item) => installmentOutstanding(item) > 0)
     return {
-      hoy: pending.filter((item) => isSameDay(item.due_date, new Date())),
+      hoy: pending.filter((item) => isSameDay(item.due_date, today)),
       manana: pending.filter((item) => isSameDay(item.due_date, tomorrow)),
-      vencidas: installments.filter((item) => item.status === 'vencida'),
-      proximas: pending.filter((item) => startOfDay(new Date(item.due_date.replace(' ', 'T'))) > todayStart),
+      mora: installments.filter((item) => isOverdue(item, today)),
+      proximas: pending.filter((item) => dayKey(item.due_date) > todayKey(today)),
     }
-  }, [installments, tomorrow])
+  }, [installments, today, tomorrow])
 
   const rows = useMemo(() => {
     const base = buckets[tab]
@@ -54,8 +62,13 @@ export default function InstallmentsView() {
           return normalize(`${client?.name ?? ''} ${loan?.code ?? ''}`).includes(term)
         })
       : base
-    return filtered.sort((a, b) => new Date(a.due_date.replace(' ', 'T')).getTime() - new Date(b.due_date.replace(' ', 'T')).getTime())
+    return filtered.sort((a, b) => dayKey(a.due_date).localeCompare(dayKey(b.due_date)))
   }, [buckets, tab, query, clientById, loanById])
+
+  const rowsTotal = useMemo(
+    () => rows.reduce((sum, item) => sum + installmentOutstanding(item), 0),
+    [rows],
+  )
 
   function exportCSV() {
     downloadCSV(
@@ -72,7 +85,7 @@ export default function InstallmentsView() {
             formatDate(item.due_date),
             item.amount,
             item.paid,
-            INSTALLMENT_STATUS_LABEL[item.status] || '',
+            INSTALLMENT_STATUS_LABEL[effectiveInstallmentStatus(item, today)] || '',
           ]
         }),
       ],
@@ -82,7 +95,7 @@ export default function InstallmentsView() {
   const tabs: { key: Tab; label: string; count: number; danger?: boolean }[] = [
     { key: 'hoy', label: 'Hoy', count: buckets.hoy.length },
     { key: 'manana', label: 'Mañana', count: buckets.manana.length },
-    { key: 'vencidas', label: 'Vencidas', count: buckets.vencidas.length, danger: true },
+    { key: 'mora', label: 'En mora', count: buckets.mora.length, danger: true },
     { key: 'proximas', label: 'Próximas', count: buckets.proximas.length },
   ]
 
@@ -115,6 +128,12 @@ export default function InstallmentsView() {
           </div>
         </div>
 
+        {rows.length > 0 && (
+          <span className="pill-filter">
+            {rows.length} cuota{rows.length === 1 ? '' : 's'} · {money(rowsTotal)}
+          </span>
+        )}
+
         <DataTable>
           <thead>
             <tr>
@@ -145,13 +164,13 @@ export default function InstallmentsView() {
                     <td>#{item.number}</td>
                     <td>{formatDate(item.due_date)}</td>
                     <td>
-                      <b>{money(Number(item.amount) - Number(item.paid))}</b>
+                      <b>{money(installmentOutstanding(item))}</b>
                     </td>
                     <td>
-                      <Badge status={INSTALLMENT_STATUS_LABEL[item.status] || 'Pendiente'} />
+                      <Badge status={INSTALLMENT_STATUS_LABEL[effectiveInstallmentStatus(item, today)] || 'Pendiente'} />
                     </td>
                     <td>
-                      {item.status !== 'pagada' && (
+                      {installmentOutstanding(item) > 0 && (
                         <button className="table-action" onClick={() => setSelectedLoan(item.loan)}>
                           Registrar pago
                         </button>
