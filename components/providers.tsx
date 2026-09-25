@@ -360,8 +360,10 @@ function DataProvider({ children }: { children: React.ReactNode }) {
       const loanPayments = data.payments.filter((item) => item.loan === id)
 
       if (loanPayments.length > 0) {
-        // With payments registered, the backend hook owns the installments.
-        // Only touch the loan terms and derive balance from the base paid amount + payments.
+        // With payments registered, the backend hook owns the paid distribution,
+        // but the loan terms (total, installment amount, dates) still change here.
+        // We update the loan and then reflect those terms on the existing
+        // installments, redistributing what has been paid by number of cuota.
         const current = data.loans.find((item) => item.id === id)
         const basePaid = Number(current?.base_paid) || 0
         const paidTotal = basePaid + loanPayments.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
@@ -375,6 +377,33 @@ function DataProvider({ children }: { children: React.ReactNode }) {
           status,
           ...loanFields,
         })
+
+        const existing = data.installments
+          .filter((item) => item.loan === id)
+          .sort((a, b) => a.number - b.number)
+        const byNumber = new Map(existing.map((item) => [item.number, item]))
+        const today = Date.now()
+        let remaining = paidTotal
+
+        await Promise.all(
+          installments.map(async (item) => {
+            const currentInstallment = byNumber.get(item.number)
+            if (!currentInstallment) return
+            const amount = item.amount
+            const applied = Math.max(0, Math.min(amount, remaining))
+            remaining -= applied
+            const overdue = applied < amount && new Date(item.due_date.replace(' ', 'T')).getTime() < today
+            const installmentStatus: InstallmentStatus =
+              amount > 0 && applied >= amount ? 'pagada' : overdue ? 'vencida' : applied > 0 ? 'parcial' : 'pendiente'
+            await pb.collection('installments').update(currentInstallment.id, {
+              due_date: item.due_date,
+              amount,
+              paid: applied,
+              status: installmentStatus,
+            })
+          }),
+        )
+
         await refresh()
         return record
       }
