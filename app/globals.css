@@ -127,3 +127,5 @@
 .clip-flag{display:inline-flex;vertical-align:middle;margin-left:6px;color:var(--text-faint)}
 .clip-flag svg{width:13px;height:13px}
 .row-click{cursor:pointer}
+.page-head-actions{display:flex;gap:9px}
+@media(max-width:700px){.page-head-actions{flex-direction:column;width:100%}}

@@ -110,7 +110,7 @@ export default function DashboardView() {
         title="Resumen de cartera"
         desc="Consulta el estado de tus préstamos y cobranza."
         action={
-          <div style={{ display: 'flex', gap: 9 }}>
+          <div className="page-head-actions">
             <Button variant="outline" onClick={() => setModal('picker')}>
               <Banknote data-icon="inline-start" />
               Registrar pago
