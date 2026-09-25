@@ -22,7 +22,9 @@ import {
   isSameDay,
   isSameMonth,
   moraTotal,
+  todayKey,
 } from '@/lib/derive'
+import { buildCashEntries, cashSummary } from '@/lib/cash'
 import { compactMoney, formatDate, formatLongDate, money, relativeTime } from '@/lib/format'
 
 const DONUT_COLORS: Record<string, string> = {
@@ -34,12 +36,17 @@ const DONUT_COLORS: Record<string, string> = {
 
 export default function DashboardView() {
   const router = useRouter()
-  const { loans, installments, payments, activity } = useData()
+  const { loans, installments, payments, cashMovements, settings, activity } = useData()
   const { clientById } = useLookups()
   const [modal, setModal] = useState<'loan' | 'payment' | 'picker' | null>(null)
   const [selectedLoan, setSelectedLoan] = useState('')
 
   const today = useToday()
+
+  const cash = useMemo(
+    () => cashSummary(buildCashEntries(payments, loans, cashMovements), settings, todayKey(today)),
+    [payments, loans, cashMovements, settings, today],
+  )
 
   const stats = useMemo(() => {
     const activeLoans = loans.filter((loan) => loan.status !== 'finalizado')
@@ -140,6 +147,24 @@ export default function DashboardView() {
           tone="green"
           href="/pagos?filtro=mes"
         />
+      </div>
+
+      <div className="card cash-strip">
+        <div className="cash-strip-item">
+          <span>Efectivo en caja</span>
+          <b>{money(cash.cash)}</b>
+        </div>
+        <div className="cash-strip-item">
+          <span>En cuenta (digital)</span>
+          <b>{money(cash.digital)}</b>
+        </div>
+        <div className="cash-strip-item">
+          <span>Total en caja</span>
+          <b>{money(cash.total)}</b>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => router.push('/caja')}>
+          Ver caja
+        </Button>
       </div>
 
       <div className="dash-grid">

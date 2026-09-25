@@ -6,9 +6,9 @@ import { Check, ChevronDown, Search } from 'lucide-react'
 import { Badge, Field, Modal, MoneyInput } from '@/components/ui/kit'
 import { Button } from '@/components/ui/button'
 import { useData, useToast, type InstallmentInput, type LoanInput } from '@/components/providers'
-import { INSTALLMENT_STATUS_LABEL, FREQUENCIES, FREQUENCY_DAYS, FREQUENCY_LABEL, installmentOutstanding, isOverdue } from '@/lib/derive'
+import { INSTALLMENT_STATUS_LABEL, FREQUENCIES, FREQUENCY_DAYS, FREQUENCY_LABEL, installmentOutstanding, isOverdue, METHOD_LABEL, PAYMENT_METHODS } from '@/lib/derive'
 import { formatDate, isoFromInputDate, money, normalize, parseAmount, toInputDate } from '@/lib/format'
-import type { Loan, LoanFrequency, LoanStatus } from '@/lib/types'
+import type { Loan, LoanFrequency, LoanStatus, PaymentMethod } from '@/lib/types'
 
 function addDays(base: Date, days: number) {
   const date = new Date(base)
@@ -60,6 +60,9 @@ export function LoanModal({
   const [count, setCount] = useState(loan ? String(loan.installments_count || loanInstallments.length || '') : '20')
   const [installment, setInstallment] = useState(loan ? String(loan.installment_amount) : '')
   const [frequency, setFrequency] = useState<LoanFrequency>((loan?.frequency as LoanFrequency) || 'diaria')
+  const [disbursementMethod, setDisbursementMethod] = useState<PaymentMethod>(
+    (loan?.disbursement_method as PaymentMethod) || 'efectivo',
+  )
   const [disbursed, setDisbursed] = useState(loan ? toInputDate(loan.disbursed_at) : toInputDate())
   const [nextDue, setNextDue] = useState(() => {
     if (!loan) return toInputDate()
@@ -147,6 +150,7 @@ export function LoanModal({
         installment_amount: installmentValue,
         frequency,
         disbursed_at: isoFromInputDate(disbursed),
+        disbursement_method: disbursementMethod,
         start_at: isoFromInputDate(toInputDate(dates[0].toISOString())),
         end_at: isoFromInputDate(toInputDate(dates[dates.length - 1].toISOString())),
         interest_rate: parseRate(interest),
@@ -286,6 +290,18 @@ export function LoanModal({
               </Field>
               <Field label="Fecha de desembolso">
                 <input type="date" value={disbursed} onChange={(event) => setDisbursed(event.target.value)} />
+              </Field>
+              <Field label="Método de desembolso">
+                <select
+                  value={disbursementMethod}
+                  onChange={(event) => setDisbursementMethod(event.target.value as PaymentMethod)}
+                >
+                  {PAYMENT_METHODS.map((option) => (
+                    <option value={option} key={option}>
+                      {METHOD_LABEL[option]}
+                    </option>
+                  ))}
+                </select>
               </Field>
               <Field label="Cuotas ya pagadas">
                 <input

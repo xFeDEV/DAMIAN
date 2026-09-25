@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Empty, Field, Head } from '@/components/ui/kit'
 import { useAuth, useData, useToast } from '@/components/providers'
 import { METHOD_LABEL, PAYMENT_METHODS } from '@/lib/derive'
+import { parseAmount, toInputDate, isoFromInputDate } from '@/lib/format'
 
-type Section = 'negocio' | 'preferencias' | 'metodos'
+type Section = 'negocio' | 'preferencias' | 'metodos' | 'caja'
 
 export default function SettingsView() {
   const { settings, updateSettings } = useData()
@@ -25,6 +26,9 @@ export default function SettingsView() {
     allow_partial_payments: true,
     due_reminders: true,
     collection_message: '',
+    cash_start_date: '',
+    cash_initial_cash: '',
+    cash_initial_digital: '',
   })
 
   useEffect(() => {
@@ -38,6 +42,9 @@ export default function SettingsView() {
       allow_partial_payments: Boolean(settings.allow_partial_payments),
       due_reminders: Boolean(settings.due_reminders),
       collection_message: settings.collection_message || '',
+      cash_start_date: settings.cash_start_date ? toInputDate(settings.cash_start_date) : '',
+      cash_initial_cash: settings.cash_initial_cash ? String(settings.cash_initial_cash) : '',
+      cash_initial_digital: settings.cash_initial_digital ? String(settings.cash_initial_digital) : '',
     })
   }, [settings])
 
@@ -47,7 +54,12 @@ export default function SettingsView() {
     if (!settings) return
     setSaving(true)
     try {
-      await updateSettings(settings.id, form)
+      await updateSettings(settings.id, {
+        ...form,
+        cash_start_date: form.cash_start_date ? isoFromInputDate(form.cash_start_date) : '',
+        cash_initial_cash: parseAmount(form.cash_initial_cash),
+        cash_initial_digital: parseAmount(form.cash_initial_digital),
+      })
       notify('Cambios guardados correctamente')
     } catch {
       notify('No se pudieron guardar los cambios')
@@ -94,6 +106,9 @@ export default function SettingsView() {
           </button>
           <button className={section === 'metodos' ? 'active' : ''} onClick={() => setSection('metodos')}>
             Métodos de pago
+          </button>
+          <button className={section === 'caja' ? 'active' : ''} onClick={() => setSection('caja')}>
+            Caja
           </button>
         </div>
 
@@ -183,6 +198,42 @@ export default function SettingsView() {
                   </div>
                 ))}
               </div>
+            </>
+          )}
+
+          {section === 'caja' && (
+            <>
+              <h2>Caja</h2>
+              <p>Punto de arranque de la caja. El saldo se calcula sumando movimientos desde esta fecha.</p>
+              <div className="form-grid">
+                <Field label="Fecha de inicio">
+                  <input
+                    type="date"
+                    value={form.cash_start_date}
+                    onChange={(event) => set('cash_start_date', event.target.value)}
+                  />
+                </Field>
+                <Field label="Saldo inicial en efectivo">
+                  <input
+                    inputMode="numeric"
+                    value={form.cash_initial_cash}
+                    onChange={(event) => set('cash_initial_cash', event.target.value.replace(/\D/g, ''))}
+                    placeholder="Ej. 500000"
+                  />
+                </Field>
+                <Field label="Saldo inicial en cuenta (digital)">
+                  <input
+                    inputMode="numeric"
+                    value={form.cash_initial_digital}
+                    onChange={(event) => set('cash_initial_digital', event.target.value.replace(/\D/g, ''))}
+                    placeholder="Ej. 2000000"
+                  />
+                </Field>
+              </div>
+              <p className="center-note">
+                Los pagos marcados "Saldo inicial" no cuentan como recaudo de caja. Ingresos de efectivo van a caja y
+                transferencia/nequi/daviplata/otro a cuenta.
+              </p>
             </>
           )}
         </div>

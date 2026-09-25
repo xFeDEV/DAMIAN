@@ -6,6 +6,7 @@ import { ThemeProvider } from 'next-themes'
 import { pb } from '@/lib/pocketbase'
 import type {
   ActivityItem,
+  CashMovement,
   Client,
   DataSnapshot,
   Installment,
@@ -133,6 +134,7 @@ export interface LoanInput {
   installment_amount: number
   frequency: string
   disbursed_at: string
+  disbursement_method?: string
   start_at: string
   end_at: string
   interest_rate?: number
@@ -161,6 +163,15 @@ export interface PaymentInput {
   receipt?: File
 }
 
+export interface CashMovementInput {
+  date: string
+  type: string
+  category: string
+  method: string
+  amount: number
+  description?: string
+}
+
 interface DataContextValue extends DataSnapshot {
   loading: boolean
   error: string | null
@@ -173,6 +184,9 @@ interface DataContextValue extends DataSnapshot {
   deletePayment: (id: string) => Promise<void>
   deleteLoan: (id: string) => Promise<void>
   deleteClient: (id: string) => Promise<void>
+  createCashMovement: (input: CashMovementInput) => Promise<CashMovement>
+  updateCashMovement: (id: string, input: CashMovementInput) => Promise<CashMovement>
+  deleteCashMovement: (id: string) => Promise<void>
   updateSettings: (id: string, input: Partial<Settings>) => Promise<Settings>
   nextCode: (prefix: 'CL' | 'PR') => string
 }
@@ -190,6 +204,7 @@ const emptySnapshot: DataSnapshot = {
   loans: [],
   installments: [],
   payments: [],
+  cashMovements: [],
   settings: null,
   activity: [],
 }
@@ -202,15 +217,16 @@ function DataProvider({ children }: { children: React.ReactNode }) {
   const hasLoaded = useRef(false)
 
   const fetchAll = useCallback(async () => {
-    const [clients, loans, installments, payments, settings, activity] = await Promise.all([
+    const [clients, loans, installments, payments, cashMovements, settings, activity] = await Promise.all([
       pb.collection('clients').getFullList<Client>({ sort: 'name' }),
       pb.collection('loans').getFullList<Loan>({ sort: '-created' }),
       pb.collection('installments').getFullList<Installment>({ sort: 'due_date' }),
       pb.collection('payments').getFullList<Payment>({ sort: '-paid_at' }),
+      pb.collection('cash_movements').getFullList<CashMovement>({ sort: '-date' }),
       pb.collection('settings').getFullList<Settings>(),
       pb.collection('activity_log').getList<ActivityItem>(1, 25, { sort: '-created' }).then((result) => result.items),
     ])
-    setData({ clients, loans, installments, payments, settings: settings[0] ?? null, activity })
+    setData({ clients, loans, installments, payments, cashMovements, settings: settings[0] ?? null, activity })
   }, [])
 
   const refresh = useCallback(async () => {
@@ -258,7 +274,7 @@ function DataProvider({ children }: { children: React.ReactNode }) {
       }, 400)
     }
     const unsubscribers: (() => void)[] = []
-    const subscriptions = ['payments', 'loans', 'installments', 'activity_log'].map((collection) =>
+    const subscriptions = ['payments', 'loans', 'installments', 'cash_movements', 'activity_log'].map((collection) =>
       pb.collection(collection).subscribe('*', schedule),
     )
     Promise.all(subscriptions)
@@ -453,6 +469,35 @@ function DataProvider({ children }: { children: React.ReactNode }) {
     [refresh],
   )
 
+  const createCashMovement = useCallback(
+    async (input: CashMovementInput) => {
+      const record = await pb.collection('cash_movements').create<CashMovement>({
+        created_by: user?.id ?? '',
+        ...input,
+      })
+      await refresh()
+      return record
+    },
+    [refresh, user],
+  )
+
+  const updateCashMovement = useCallback(
+    async (id: string, input: CashMovementInput) => {
+      const record = await pb.collection('cash_movements').update<CashMovement>(id, input)
+      await refresh()
+      return record
+    },
+    [refresh],
+  )
+
+  const deleteCashMovement = useCallback(
+    async (id: string) => {
+      await pb.collection('cash_movements').delete(id)
+      await refresh()
+    },
+    [refresh],
+  )
+
   const updateSettings = useCallback(
     async (id: string, input: Partial<Settings>) => {
       const record = await pb.collection('settings').update<Settings>(id, input)
@@ -482,6 +527,9 @@ function DataProvider({ children }: { children: React.ReactNode }) {
         deletePayment,
         deleteLoan,
         deleteClient,
+        createCashMovement,
+        updateCashMovement,
+        deleteCashMovement,
         updateSettings,
         nextCode,
       }}

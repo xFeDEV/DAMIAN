@@ -6,6 +6,7 @@ import {
   Bell,
   CalendarClock,
   ChevronLeft,
+  Coins,
   FileBarChart,
   Landmark,
   LayoutDashboard,
@@ -31,6 +32,7 @@ const NAV = [
   ['/prestamos', 'Préstamos', WalletCards],
   ['/cuotas', 'Cuotas', CalendarClock],
   ['/pagos', 'Pagos', Receipt],
+  ['/caja', 'Caja', Coins],
   ['/cartera', 'Cartera', Landmark],
   ['/reportes', 'Reportes', FileBarChart],
 ] as const

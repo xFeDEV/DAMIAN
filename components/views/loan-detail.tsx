@@ -17,6 +17,7 @@ import {
   installmentOutstanding,
   LOAN_STATUS_LABEL,
   loanProgress,
+  METHOD_LABEL,
   paymentCoverageByInstallment,
 } from '@/lib/derive'
 import { formatDate, money } from '@/lib/format'
@@ -147,6 +148,10 @@ export default function LoanDetailView() {
           <div>
             <span>Desembolso</span>
             <b>{formatDate(loan.disbursed_at)}</b>
+          </div>
+          <div>
+            <span>Método de desembolso</span>
+            <b>{METHOD_LABEL[loan.disbursement_method] || 'Efectivo'}</b>
           </div>
           <div>
             <span>Inicio de pagos</span>

@@ -38,6 +38,7 @@ export interface Loan extends RecordModel {
   installment_amount: number
   frequency: LoanFrequency | ''
   disbursed_at: string
+  disbursement_method: PaymentMethod | ''
   start_at: string
   end_at: string
   paid_total: number
@@ -80,7 +81,23 @@ export interface Settings extends RecordModel {
   due_reminders: boolean
   grace_days: number
   collection_message: string
+  cash_start_date: string
+  cash_initial_cash: number
+  cash_initial_digital: number
   logo: string
+}
+
+export type CashMovementType = 'ingreso' | 'egreso'
+export type CashCategory = 'gasto' | 'retiro' | 'aporte' | 'ajuste' | 'otro'
+
+export interface CashMovement extends RecordModel {
+  date: string
+  type: CashMovementType | ''
+  category: CashCategory | ''
+  method: PaymentMethod | ''
+  amount: number
+  description: string
+  created_by: string
 }
 
 export interface ActivityItem extends RecordModel {
@@ -96,6 +113,7 @@ export interface DataSnapshot {
   loans: Loan[]
   installments: Installment[]
   payments: Payment[]
+  cashMovements: CashMovement[]
   settings: Settings | null
   activity: ActivityItem[]
 }
