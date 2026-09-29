@@ -9,7 +9,7 @@ const plex = IBM_Plex_Sans({
 })
 
 export const metadata: Metadata = {
-  title: 'Consulta tu crédito | Damián',
+  title: 'Consulta tu crédito | 4x4',
   description: 'Consulta el estado de tu crédito con tu cédula o tu número de teléfono.',
 }
 

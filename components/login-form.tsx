@@ -47,7 +47,7 @@ export function LoginForm() {
             <WalletCards />
           </div>
           <div>
-            <h1>Damián</h1>
+            <h1>4x4</h1>
             <p>Gestión de cartera</p>
           </div>
         </div>
@@ -109,7 +109,7 @@ export function LoginForm() {
         </Button>
 
         <p className="login-footnote">
-          Acceso reservado para operadores de Damián.
+          Acceso reservado para operadores de 4x4.
           <br />
           ¿Eres cliente? <Link href="/consulta">Consulta tu crédito</Link>
         </p>

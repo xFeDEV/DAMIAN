@@ -31,13 +31,10 @@ export default function SearchView() {
     <>
       <Head title="Buscador" desc="Encuentra clientes y consulta rápidamente su información." />
       <section className="google-search-section">
-        <div className="google-wordmark" aria-label="Buscar en Damián">
-          <span>D</span>
-          <span>a</span>
-          <span>m</span>
-          <span>i</span>
-          <span>á</span>
-          <span>n</span>
+        <div className="google-wordmark" aria-label="Buscar en 4x4">
+          <span>4</span>
+          <span>x</span>
+          <span>4</span>
         </div>
         <p className="google-search-caption">Encuentra rápidamente clientes y su información</p>
 

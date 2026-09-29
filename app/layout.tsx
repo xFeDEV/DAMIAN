@@ -4,9 +4,9 @@ import { Providers } from '@/components/providers'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Damián | Gestión de cartera',
-  description: 'Gestiona clientes, préstamos, cuotas y pagos de Damián en un solo lugar.',
-  generator: 'Damián',
+  title: '4x4 | Gestión de cartera',
+  description: 'Gestiona clientes, préstamos, cuotas y pagos de 4x4 en un solo lugar.',
+  generator: '4x4',
 }
 
 export const viewport: Viewport = {

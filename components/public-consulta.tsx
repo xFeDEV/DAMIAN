@@ -43,7 +43,7 @@ export function PublicConsulta() {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [result, setResult] = useState<ConsultaResult | null>(null)
-  const [business, setBusiness] = useState<{ name: string; phone: string }>({ name: 'Damián', phone: '' })
+  const [business, setBusiness] = useState<{ name: string; phone: string }>({ name: '4x4', phone: '' })
   const [error, setError] = useState('')
 
   // Trae marca y contacto del negocio (respuesta pública, sin datos de nadie).

@@ -1,4 +1,4 @@
-# Damián | Gestión de cartera (Frontend)
+# 4x4 | Gestión de cartera (Frontend)
 
 Aplicación de gestión de clientes, préstamos, cuotas, pagos y cartera. Construida con
 **Next.js 16 (App Router)**, **React 19** y **Tailwind 4**, conectada a un backend

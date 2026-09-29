@@ -29,7 +29,7 @@ export function WhatsAppButton({ clientId, loanId, className }: { clientId: stri
 
   const message = buildCollectionMessage(settings?.collection_message, {
     nombre: client?.name ?? '',
-    negocio: settings?.business_name || 'Damián',
+    negocio: settings?.business_name || '4x4',
     cuotas: overdue.length,
     monto: money(total),
     credito: loan?.code ?? 'sus créditos',
