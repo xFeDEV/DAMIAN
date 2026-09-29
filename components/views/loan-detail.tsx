@@ -8,6 +8,7 @@ import { Badge, DataTable, Empty, Stat } from '@/components/ui/kit'
 import { LoanModal } from '@/components/modals/loan-modal'
 import { PaymentModal } from '@/components/modals/payment-modal'
 import { PaymentDetailModal } from '@/components/modals/payment-detail'
+import { NonPaymentModal } from '@/components/modals/non-payment-modal'
 import { useAuth, useData, useLookups, useToast, useToday } from '@/components/providers'
 import {
   effectiveInstallmentStatus,
@@ -21,11 +22,12 @@ import {
   paymentCoverageByInstallment,
 } from '@/lib/derive'
 import { formatDate, money } from '@/lib/format'
+import type { InstallmentNote } from '@/lib/types'
 
 export default function LoanDetailView() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
-  const { installments, payments, deleteLoan } = useData()
+  const { installments, payments, installmentNotes, deleteLoan } = useData()
   const { user } = useAuth()
   const notify = useToast()
   const { loanById, clientById } = useLookups()
@@ -34,6 +36,7 @@ export default function LoanDetailView() {
   const [paymentNumber, setPaymentNumber] = useState<number | undefined>()
   const [showEdit, setShowEdit] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [noteFor, setNoteFor] = useState('')
   const [paymentDetail, setPaymentDetail] = useState<{ paymentId: string; installmentNumber: number; coveredAmount: number } | null>(null)
 
   const isAdmin = user?.role === 'admin'
@@ -44,6 +47,12 @@ export default function LoanDetailView() {
     () => installments.filter((item) => item.loan === loan?.id).sort((a, b) => a.number - b.number),
     [installments, loan?.id],
   )
+
+  const notesByInstallment = useMemo(() => {
+    const map = new Map<string, InstallmentNote>()
+    for (const note of installmentNotes) map.set(note.installment, note)
+    return map
+  }, [installmentNotes])
 
   const coverage = useMemo(
     () => paymentCoverageByInstallment(rows, payments.filter((item) => item.loan === loan?.id)),
@@ -199,7 +208,14 @@ export default function LoanDetailView() {
                 return (
                   <tr key={item.id}>
                     <td>#{item.number}</td>
-                    <td>{formatDate(item.due_date)}</td>
+                    <td>
+                      {formatDate(item.due_date)}
+                      {notesByInstallment.has(item.id) && (
+                        <small className="note-flag" title={notesByInstallment.get(item.id)?.reason}>
+                          Justificada
+                        </small>
+                      )}
+                    </td>
                     <td>{money(item.amount)}</td>
                     <td>{money(item.paid)}</td>
                     <td>{money(Number(item.amount) - Number(item.paid))}</td>
@@ -226,17 +242,22 @@ export default function LoanDetailView() {
                             </button>
                           ))}
                     </td>
-                    <td>
+                    <td className="row-actions">
                       {installmentOutstanding(item) > 0 && (
-                        <button
-                          className="table-action"
-                          onClick={() => {
-                            setPaymentNumber(item.number)
-                            setShowPayment(true)
-                          }}
-                        >
-                          Registrar pago
-                        </button>
+                        <>
+                          <button
+                            className="table-action"
+                            onClick={() => {
+                              setPaymentNumber(item.number)
+                              setShowPayment(true)
+                            }}
+                          >
+                            Registrar pago
+                          </button>
+                          <button className="table-action" onClick={() => setNoteFor(item.id)}>
+                            Justificar
+                          </button>
+                        </>
                       )}
                     </td>
                   </tr>
@@ -265,6 +286,7 @@ export default function LoanDetailView() {
           close={() => setPaymentDetail(null)}
         />
       )}
+      {noteFor && <NonPaymentModal installmentId={noteFor} close={() => setNoteFor('')} />}
     </>
   )
 }

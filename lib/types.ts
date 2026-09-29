@@ -100,6 +100,16 @@ export interface CashMovement extends RecordModel {
   created_by: string
 }
 
+export interface InstallmentNote extends RecordModel {
+  loan: string
+  installment: string
+  client: string
+  reason: string
+  previous_due_date: string
+  new_due_date: string
+  created_by: string
+}
+
 export interface ActivityItem extends RecordModel {
   client: string
   loan: string
@@ -114,6 +124,7 @@ export interface DataSnapshot {
   installments: Installment[]
   payments: Payment[]
   cashMovements: CashMovement[]
+  installmentNotes: InstallmentNote[]
   settings: Settings | null
   activity: ActivityItem[]
 }

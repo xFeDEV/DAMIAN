@@ -6,6 +6,7 @@ import { CalendarDays, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge, DataTable, Empty, Head } from '@/components/ui/kit'
 import { PaymentModal } from '@/components/modals/payment-modal'
+import { NonPaymentModal } from '@/components/modals/non-payment-modal'
 import { WhatsAppButton } from '@/components/ui/whatsapp-button'
 import { useData, useLookups, useToday } from '@/components/providers'
 import {
@@ -31,6 +32,7 @@ export default function InstallmentsView() {
   const [tab, setTab] = useState<Tab>('hoy')
   const [query, setQuery] = useState('')
   const [selectedLoan, setSelectedLoan] = useState('')
+  const [noteFor, setNoteFor] = useState('')
 
   useEffect(() => {
     const value = new URLSearchParams(window.location.search).get('filtro') as Tab | null
@@ -173,9 +175,14 @@ export default function InstallmentsView() {
                     <td className="row-actions">
                       <WhatsAppButton clientId={item.client} loanId={item.loan} />
                       {installmentOutstanding(item) > 0 && (
-                        <button className="table-action" onClick={() => setSelectedLoan(item.loan)}>
-                          Registrar pago
-                        </button>
+                        <>
+                          <button className="table-action" onClick={() => setSelectedLoan(item.loan)}>
+                            Registrar pago
+                          </button>
+                          <button className="table-action" onClick={() => setNoteFor(item.id)}>
+                            Justificar
+                          </button>
+                        </>
                       )}
                     </td>
                   </tr>
@@ -193,6 +200,7 @@ export default function InstallmentsView() {
       </div>
 
       {selectedLoan && <PaymentModal loanId={selectedLoan} close={() => setSelectedLoan('')} />}
+      {noteFor && <NonPaymentModal installmentId={noteFor} close={() => setNoteFor('')} />}
     </>
   )
 }

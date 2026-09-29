@@ -144,3 +144,15 @@
 .cash-kind.egreso{color:var(--danger-text)}
 .negative{color:var(--danger-text)}
 @media(max-width:700px){.cash-strip{flex-direction:column;align-items:flex-start;gap:14px}.cash-strip>button{margin-left:0;width:100%}.cash-today-grid{grid-template-columns:1fr 1fr}}
+
+.check-row{display:flex;align-items:center;gap:9px;margin-bottom:16px;cursor:pointer;font-size:13px;color:var(--text-secondary)}
+.check-row input{width:auto}
+.note-history{margin-top:16px;display:flex;flex-direction:column;gap:10px}
+.note-history>span{font-size:12px;font-weight:600;color:var(--text-secondary)}
+.note-item{border:1px solid var(--border);border-radius:9px;padding:10px 12px;background:var(--surface-2)}
+.note-head{display:flex;align-items:center;gap:6px;color:var(--text-faint);font-size:11px;margin-bottom:4px}
+.note-head svg{width:14px;height:14px}
+.note-item p{margin:0;font-size:13px;color:var(--foreground)}
+.note-item small{display:block;margin-top:4px;color:var(--text-faint);font-size:11px}
+.note-flag{display:block;margin-top:3px;color:var(--warn-text);font-size:11px;font-weight:600}
+.row-actions .table-action+.table-action{margin-left:10px}

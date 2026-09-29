@@ -10,6 +10,7 @@ import type {
   Client,
   DataSnapshot,
   Installment,
+  InstallmentNote,
   InstallmentStatus,
   Loan,
   LoanStatus,
@@ -172,6 +173,13 @@ export interface CashMovementInput {
   description?: string
 }
 
+export interface RescheduleInput {
+  installment: string
+  reason: string
+  new_date?: string
+  shift_following?: boolean
+}
+
 interface DataContextValue extends DataSnapshot {
   loading: boolean
   error: string | null
@@ -187,6 +195,7 @@ interface DataContextValue extends DataSnapshot {
   createCashMovement: (input: CashMovementInput) => Promise<CashMovement>
   updateCashMovement: (id: string, input: CashMovementInput) => Promise<CashMovement>
   deleteCashMovement: (id: string) => Promise<void>
+  rescheduleInstallment: (input: RescheduleInput) => Promise<void>
   updateSettings: (id: string, input: Partial<Settings>) => Promise<Settings>
   nextCode: (prefix: 'CL' | 'PR') => string
 }
@@ -205,6 +214,7 @@ const emptySnapshot: DataSnapshot = {
   installments: [],
   payments: [],
   cashMovements: [],
+  installmentNotes: [],
   settings: null,
   activity: [],
 }
@@ -217,16 +227,18 @@ function DataProvider({ children }: { children: React.ReactNode }) {
   const hasLoaded = useRef(false)
 
   const fetchAll = useCallback(async () => {
-    const [clients, loans, installments, payments, cashMovements, settings, activity] = await Promise.all([
-      pb.collection('clients').getFullList<Client>({ sort: 'name' }),
-      pb.collection('loans').getFullList<Loan>({ sort: '-created' }),
-      pb.collection('installments').getFullList<Installment>({ sort: 'due_date' }),
-      pb.collection('payments').getFullList<Payment>({ sort: '-paid_at' }),
-      pb.collection('cash_movements').getFullList<CashMovement>({ sort: '-date' }),
-      pb.collection('settings').getFullList<Settings>(),
-      pb.collection('activity_log').getList<ActivityItem>(1, 25, { sort: '-created' }).then((result) => result.items),
-    ])
-    setData({ clients, loans, installments, payments, cashMovements, settings: settings[0] ?? null, activity })
+    const [clients, loans, installments, payments, cashMovements, installmentNotes, settings, activity] =
+      await Promise.all([
+        pb.collection('clients').getFullList<Client>({ sort: 'name' }),
+        pb.collection('loans').getFullList<Loan>({ sort: '-created' }),
+        pb.collection('installments').getFullList<Installment>({ sort: 'due_date' }),
+        pb.collection('payments').getFullList<Payment>({ sort: '-paid_at' }),
+        pb.collection('cash_movements').getFullList<CashMovement>({ sort: '-date' }),
+        pb.collection('installment_notes').getFullList<InstallmentNote>({ sort: '-created' }),
+        pb.collection('settings').getFullList<Settings>(),
+        pb.collection('activity_log').getList<ActivityItem>(1, 25, { sort: '-created' }).then((result) => result.items),
+      ])
+    setData({ clients, loans, installments, payments, cashMovements, installmentNotes, settings: settings[0] ?? null, activity })
   }, [])
 
   const refresh = useCallback(async () => {
@@ -274,8 +286,8 @@ function DataProvider({ children }: { children: React.ReactNode }) {
       }, 400)
     }
     const unsubscribers: (() => void)[] = []
-    const subscriptions = ['payments', 'loans', 'installments', 'cash_movements', 'activity_log'].map((collection) =>
-      pb.collection(collection).subscribe('*', schedule),
+    const subscriptions = ['payments', 'loans', 'installments', 'cash_movements', 'installment_notes', 'activity_log'].map(
+      (collection) => pb.collection(collection).subscribe('*', schedule),
     )
     Promise.all(subscriptions)
       .then((fns) => {
@@ -527,6 +539,21 @@ function DataProvider({ children }: { children: React.ReactNode }) {
     [refresh],
   )
 
+  const rescheduleInstallment = useCallback(
+    async (input: RescheduleInput) => {
+      await pb.send(`/api/damian/installments/${input.installment}/reschedule`, {
+        method: 'POST',
+        body: {
+          reason: input.reason,
+          new_date: input.new_date || '',
+          shift_following: input.shift_following !== false,
+        },
+      })
+      await refresh()
+    },
+    [refresh],
+  )
+
   const updateSettings = useCallback(
     async (id: string, input: Partial<Settings>) => {
       const record = await pb.collection('settings').update<Settings>(id, input)
@@ -559,6 +586,7 @@ function DataProvider({ children }: { children: React.ReactNode }) {
         createCashMovement,
         updateCashMovement,
         deleteCashMovement,
+        rescheduleInstallment,
         updateSettings,
         nextCode,
       }}
