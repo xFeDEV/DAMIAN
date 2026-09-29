@@ -44,6 +44,8 @@ export interface Loan extends RecordModel {
   paid_total: number
   base_paid: number
   status: LoanStatus | ''
+  created_by: string
+  updated_by: string
   notes: string
 }
 
@@ -110,6 +112,22 @@ export interface InstallmentNote extends RecordModel {
   created_by: string
 }
 
+export interface AuditChange {
+  antes: unknown
+  despues: unknown
+}
+
+export interface AuditEntry extends RecordModel {
+  collection: string
+  record: string
+  loan: string
+  client: string
+  action: 'create' | 'update' | 'delete' | ''
+  user: string
+  user_name: string
+  changes: Record<string, AuditChange>
+}
+
 export interface ActivityItem extends RecordModel {
   client: string
   loan: string
@@ -125,6 +143,8 @@ export interface DataSnapshot {
   payments: Payment[]
   cashMovements: CashMovement[]
   installmentNotes: InstallmentNote[]
+  auditLog: AuditEntry[]
+  operators: Operator[]
   settings: Settings | null
   activity: ActivityItem[]
 }

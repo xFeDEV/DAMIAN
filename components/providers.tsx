@@ -6,6 +6,7 @@ import { ThemeProvider } from 'next-themes'
 import { pb } from '@/lib/pocketbase'
 import type {
   ActivityItem,
+  AuditEntry,
   CashMovement,
   Client,
   DataSnapshot,
@@ -196,6 +197,8 @@ interface DataContextValue extends DataSnapshot {
   updateCashMovement: (id: string, input: CashMovementInput) => Promise<CashMovement>
   deleteCashMovement: (id: string) => Promise<void>
   rescheduleInstallment: (input: RescheduleInput) => Promise<void>
+  updateInstallmentNote: (id: string, reason: string) => Promise<void>
+  deleteInstallmentNote: (id: string) => Promise<void>
   updateSettings: (id: string, input: Partial<Settings>) => Promise<Settings>
   nextCode: (prefix: 'CL' | 'PR') => string
 }
@@ -215,6 +218,8 @@ const emptySnapshot: DataSnapshot = {
   payments: [],
   cashMovements: [],
   installmentNotes: [],
+  auditLog: [],
+  operators: [],
   settings: null,
   activity: [],
 }
@@ -227,7 +232,7 @@ function DataProvider({ children }: { children: React.ReactNode }) {
   const hasLoaded = useRef(false)
 
   const fetchAll = useCallback(async () => {
-    const [clients, loans, installments, payments, cashMovements, installmentNotes, settings, activity] =
+    const [clients, loans, installments, payments, cashMovements, installmentNotes, auditLog, operators, settings, activity] =
       await Promise.all([
         pb.collection('clients').getFullList<Client>({ sort: 'name' }),
         pb.collection('loans').getFullList<Loan>({ sort: '-created' }),
@@ -235,10 +240,12 @@ function DataProvider({ children }: { children: React.ReactNode }) {
         pb.collection('payments').getFullList<Payment>({ sort: '-paid_at' }),
         pb.collection('cash_movements').getFullList<CashMovement>({ sort: '-date' }),
         pb.collection('installment_notes').getFullList<InstallmentNote>({ sort: '-created' }),
+        pb.collection('audit_log').getFullList<AuditEntry>({ sort: '-created' }),
+        pb.collection('operators').getFullList<Operator>({ sort: 'name' }),
         pb.collection('settings').getFullList<Settings>(),
         pb.collection('activity_log').getList<ActivityItem>(1, 25, { sort: '-created' }).then((result) => result.items),
       ])
-    setData({ clients, loans, installments, payments, cashMovements, installmentNotes, settings: settings[0] ?? null, activity })
+    setData({ clients, loans, installments, payments, cashMovements, installmentNotes, auditLog, operators, settings: settings[0] ?? null, activity })
   }, [])
 
   const refresh = useCallback(async () => {
@@ -286,9 +293,15 @@ function DataProvider({ children }: { children: React.ReactNode }) {
       }, 400)
     }
     const unsubscribers: (() => void)[] = []
-    const subscriptions = ['payments', 'loans', 'installments', 'cash_movements', 'installment_notes', 'activity_log'].map(
-      (collection) => pb.collection(collection).subscribe('*', schedule),
-    )
+    const subscriptions = [
+      'payments',
+      'loans',
+      'installments',
+      'cash_movements',
+      'installment_notes',
+      'audit_log',
+      'activity_log',
+    ].map((collection) => pb.collection(collection).subscribe('*', schedule))
     Promise.all(subscriptions)
       .then((fns) => {
         if (cancelled) fns.forEach((unsubscribe) => unsubscribe())
@@ -554,6 +567,22 @@ function DataProvider({ children }: { children: React.ReactNode }) {
     [refresh],
   )
 
+  const updateInstallmentNote = useCallback(
+    async (id: string, reason: string) => {
+      await pb.collection('installment_notes').update(id, { reason })
+      await refresh()
+    },
+    [refresh],
+  )
+
+  const deleteInstallmentNote = useCallback(
+    async (id: string) => {
+      await pb.collection('installment_notes').delete(id)
+      await refresh()
+    },
+    [refresh],
+  )
+
   const updateSettings = useCallback(
     async (id: string, input: Partial<Settings>) => {
       const record = await pb.collection('settings').update<Settings>(id, input)
@@ -587,6 +616,8 @@ function DataProvider({ children }: { children: React.ReactNode }) {
         updateCashMovement,
         deleteCashMovement,
         rescheduleInstallment,
+        updateInstallmentNote,
+        deleteInstallmentNote,
         updateSettings,
         nextCode,
       }}
@@ -597,13 +628,14 @@ function DataProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useLookups() {
-  const { clients, loans } = useData()
+  const { clients, loans, operators } = useData()
   return useMemo(
     () => ({
       clientById: new Map(clients.map((client) => [client.id, client])),
       loanById: new Map(loans.map((loan) => [loan.id, loan])),
+      operatorById: new Map(operators.map((operator) => [operator.id, operator])),
     }),
-    [clients, loans],
+    [clients, loans, operators],
   )
 }
 

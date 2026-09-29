@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Banknote, CheckCircle2, ChevronLeft, CircleDollarSign, Pencil, Trash2, WalletCards } from 'lucide-react'
+import { Banknote, CheckCircle2, ChevronLeft, CircleDollarSign, Pencil, Plus, Trash2, WalletCards } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge, DataTable, Empty, Stat } from '@/components/ui/kit'
 import { LoanModal } from '@/components/modals/loan-modal'
@@ -21,16 +21,17 @@ import {
   METHOD_LABEL,
   paymentCoverageByInstallment,
 } from '@/lib/derive'
-import { formatDate, money } from '@/lib/format'
+import { formatDate, formatTimestampDate, money } from '@/lib/format'
+import { AUDIT_ACTION_LABEL, AUDIT_COLLECTION_LABEL, auditFieldLabel, isMoneyField } from '@/lib/audit'
 import type { InstallmentNote } from '@/lib/types'
 
 export default function LoanDetailView() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
-  const { installments, payments, installmentNotes, deleteLoan } = useData()
+  const { installments, payments, installmentNotes, auditLog, deleteLoan } = useData()
   const { user } = useAuth()
   const notify = useToast()
-  const { loanById, clientById } = useLookups()
+  const { loanById, clientById, operatorById } = useLookups()
   const today = useToday()
   const [showPayment, setShowPayment] = useState(false)
   const [paymentNumber, setPaymentNumber] = useState<number | undefined>()
@@ -53,6 +54,20 @@ export default function LoanDetailView() {
     for (const note of installmentNotes) map.set(note.installment, note)
     return map
   }, [installmentNotes])
+
+  const operatorName = (id?: string) => (id ? operatorById.get(id)?.name || '—' : 'Sistema')
+
+  const auditValue = (field: string, value: unknown) => {
+    if (value === null || value === undefined || value === '') return '—'
+    if (isMoneyField(field)) return money(Number(value))
+    if (typeof value === 'boolean') return value ? 'Sí' : 'No'
+    return String(value)
+  }
+
+  const loanAudit = useMemo(
+    () => auditLog.filter((entry) => entry.loan === loan?.id).slice(0, 60),
+    [auditLog, loan?.id],
+  )
 
   const coverage = useMemo(
     () => paymentCoverageByInstallment(rows, payments.filter((item) => item.loan === loan?.id)),
@@ -108,6 +123,12 @@ export default function LoanDetailView() {
                 {client?.name ?? '—'}
               </button>
             </b>
+          </p>
+          <p className="detail-authorship">
+            Registrado por <b>{operatorName(loan.created_by)}</b> · {formatTimestampDate(loan.created)}
+            <br />
+            Última actualización por <b>{operatorName(loan.updated_by || loan.created_by)}</b> ·{' '}
+            {formatTimestampDate(loan.updated)}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 9 }}>
@@ -272,6 +293,44 @@ export default function LoanDetailView() {
             )}
           </tbody>
         </DataTable>
+      </div>
+
+      <div className="card">
+        <div className="section-head">
+          <div>
+            <h2>Trazabilidad</h2>
+            <p>Quién cambió qué y cuándo en este crédito.</p>
+          </div>
+        </div>
+        {loanAudit.length > 0 ? (
+          <div className="audit-list" style={{ padding: '0 22px 10px' }}>
+            {loanAudit.map((entry) => (
+              <div className="audit-item" key={entry.id}>
+                <div className={`audit-badge ${entry.action}`}>
+                  {entry.action === 'create' ? <Plus /> : entry.action === 'delete' ? <Trash2 /> : <Pencil />}
+                </div>
+                <div className="audit-body">
+                  <b>{entry.user_name || 'Sistema'}</b>{' '}
+                  {AUDIT_ACTION_LABEL[entry.action] || entry.action}{' '}
+                  {AUDIT_COLLECTION_LABEL[entry.collection] || entry.collection}
+                  <span className="audit-meta">{formatTimestampDate(entry.created)}</span>
+                  {entry.changes && Object.keys(entry.changes).length > 0 && (
+                    <div className="audit-changes">
+                      {Object.entries(entry.changes).map(([field, change]) => (
+                        <div className="audit-change" key={field}>
+                          <b>{auditFieldLabel(field)}:</b> <span className="before">{auditValue(field, change.antes)}</span>{' '}
+                          → <span className="after">{auditValue(field, change.despues)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Empty title="Sin cambios registrados" desc="La trazabilidad se registra desde que se habilitó esta función." />
+        )}
       </div>
 
       {showPayment && (

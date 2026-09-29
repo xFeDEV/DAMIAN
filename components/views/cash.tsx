@@ -9,7 +9,8 @@ import { CashMovementModal } from '@/components/modals/cash-movement-modal'
 import { useAuth, useData, useToday } from '@/components/providers'
 import { buildCashEntries, cashSummary, CASH_CATEGORY_LABEL } from '@/lib/cash'
 import { dayKey, METHOD_LABEL, todayKey } from '@/lib/derive'
-import { downloadCSV, formatDate, money } from '@/lib/format'
+import { CASH_SETTING_FIELDS, auditFieldLabel, isMoneyField } from '@/lib/audit'
+import { downloadCSV, formatDate, formatTimestampDate, money, toInputDate } from '@/lib/format'
 import type { CashMovement } from '@/lib/types'
 
 type Range = 'hoy' | 'semana' | 'mes' | 'todo'
@@ -22,7 +23,7 @@ const RANGES: { key: Range; label: string }[] = [
 ]
 
 export default function CashView() {
-  const { payments, loans, cashMovements, settings } = useData()
+  const { payments, loans, cashMovements, auditLog, settings } = useData()
   const { user } = useAuth()
   const router = useRouter()
   const today = useToday()
@@ -30,15 +31,32 @@ export default function CashView() {
   const [range, setRange] = useState<Range>('mes')
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<CashMovement | null>(null)
+  const [asOf, setAsOf] = useState(() => toInputDate())
 
   const entries = useMemo(
     () => buildCashEntries(payments, loans, cashMovements),
     [payments, loans, cashMovements],
   )
-  const summary = useMemo(() => cashSummary(entries, settings, todayKey(today)), [entries, settings, today])
 
-  const startDay = dayKey(settings?.cash_start_date) || todayKey(today)
   const todayDay = todayKey(today)
+  const startDay = dayKey(settings?.cash_start_date) || todayDay
+  const asOfDay = dayKey(asOf) || todayDay
+  const summary = useMemo(() => cashSummary(entries, settings, asOfDay), [entries, settings, asOfDay])
+
+  const settingsAudit = useMemo(
+    () =>
+      auditLog
+        .filter((entry) => entry.collection === 'settings' && entry.changes && CASH_SETTING_FIELDS.some((field) => field in entry.changes))
+        .slice(0, 20),
+    [auditLog],
+  )
+
+  function cashValue(field: string, value: unknown) {
+    if (value === null || value === undefined || value === '') return '—'
+    if (field === 'cash_start_date') return formatDate(String(value))
+    if (isMoneyField(field)) return money(Number(value))
+    return String(value)
+  }
 
   const rows = useMemo(() => {
     const weekAgo = new Date(today)
@@ -113,6 +131,18 @@ export default function CashView() {
         <Stat label="Efectivo en caja" value={money(summary.cash)} icon={Banknote} tone="green" />
         <Stat label="En cuenta (digital)" value={money(summary.digital)} icon={Landmark} tone="blue" />
         <Stat label="Total" value={money(summary.total)} icon={CircleDollarSign} tone="amber" />
+      </div>
+
+      <div className="card cash-asof">
+        <span className="cash-note" style={{ padding: 0 }}>
+          Saldo al cierre de:
+        </span>
+        <input type="date" value={asOf} max={toInputDate()} onChange={(event) => setAsOf(event.target.value)} />
+        {asOfDay !== todayDay && (
+          <button className="link" onClick={() => setAsOf(toInputDate())}>
+            Volver a hoy
+          </button>
+        )}
       </div>
 
       <div className="card cash-today">
@@ -215,6 +245,36 @@ export default function CashView() {
             )}
           </tbody>
         </DataTable>
+      </div>
+
+      <div className="card">
+        <Section title="Historial de caja" desc="Quién cambió la fecha de inicio y los saldos iniciales." />
+        {settingsAudit.length > 0 ? (
+          <div className="audit-list" style={{ padding: '0 22px 10px' }}>
+            {settingsAudit.map((entry) => (
+              <div className="audit-item" key={entry.id}>
+                <div className="audit-badge">
+                  <Pencil />
+                </div>
+                <div className="audit-body">
+                  <b>{entry.user_name || 'Sistema'}</b>
+                  <span className="audit-meta">{formatTimestampDate(entry.created)}</span>
+                  <div className="audit-changes">
+                    {CASH_SETTING_FIELDS.filter((field) => entry.changes[field]).map((field) => (
+                      <div className="audit-change" key={field}>
+                        <b>{auditFieldLabel(field)}:</b>{' '}
+                        <span className="before">{cashValue(field, entry.changes[field].antes)}</span> →{' '}
+                        <span className="after">{cashValue(field, entry.changes[field].despues)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Empty title="Sin cambios registrados" desc="Aún no hay cambios en la configuración de caja." />
+        )}
       </div>
 
       {showModal && <CashMovementModal movement={editing} close={() => setShowModal(false)} />}
