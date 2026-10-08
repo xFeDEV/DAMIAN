@@ -142,3 +142,77 @@ export function cashSummary(entries: CashEntry[], settings: Settings | null, asO
 
   return { cash, digital, total: cash + digital, income, expense }
 }
+
+export interface RangeDaily {
+  day: string
+  cobrado: number
+  prestado: number
+}
+
+export interface RangeSummary {
+  cobrado: number
+  prestado: number
+  neto: number
+  paymentCount: number
+  loanCount: number
+  clientsServed: number
+  cobradoPool: { efectivo: number; digital: number }
+  prestadoPool: { efectivo: number; digital: number }
+  daily: RangeDaily[]
+  payments: Payment[]
+  loans: Loan[]
+}
+
+// Resumen de un rango de fechas (solo dia calendario): cuanto se cobro (pagos de
+// clientes, sin "Saldo inicial") y cuanto se presto (capital desembolsado).
+export function rangeSummary(payments: Payment[], loans: Loan[], fromKey: string, toKey: string): RangeSummary {
+  const inRange = (day: string) => day !== '' && day >= fromKey && day <= toKey
+  const filteredPayments = payments
+    .filter((payment) => !isInitialPayment(payment) && inRange(dayKey(payment.paid_at)))
+    .sort((a, b) => dayKey(b.paid_at).localeCompare(dayKey(a.paid_at)))
+  const filteredLoans = loans
+    .filter((loan) => inRange(dayKey(loan.disbursed_at)))
+    .sort((a, b) => dayKey(b.disbursed_at).localeCompare(dayKey(a.disbursed_at)))
+
+  const cobradoPool = { efectivo: 0, digital: 0 }
+  const prestadoPool = { efectivo: 0, digital: 0 }
+  const days = new Map<string, RangeDaily>()
+  const dayOf = (day: string) => {
+    let item = days.get(day)
+    if (!item) {
+      item = { day, cobrado: 0, prestado: 0 }
+      days.set(day, item)
+    }
+    return item
+  }
+
+  let cobrado = 0
+  for (const payment of filteredPayments) {
+    const amount = Number(payment.amount) || 0
+    cobrado += amount
+    cobradoPool[methodPool(payment.method)] += amount
+    dayOf(dayKey(payment.paid_at)).cobrado += amount
+  }
+
+  let prestado = 0
+  for (const loan of filteredLoans) {
+    const amount = Number(loan.amount) || 0
+    prestado += amount
+    prestadoPool[methodPool(loan.disbursement_method)] += amount
+    dayOf(dayKey(loan.disbursed_at)).prestado += amount
+  }
+
+  return {
+    cobrado,
+    prestado,
+    neto: cobrado - prestado,
+    paymentCount: filteredPayments.length,
+    loanCount: filteredLoans.length,
+    clientsServed: new Set(filteredPayments.map((payment) => payment.client)).size,
+    cobradoPool,
+    prestadoPool,
+    daily: [...days.values()].sort((a, b) => a.day.localeCompare(b.day)),
+    payments: filteredPayments,
+    loans: filteredLoans,
+  }
+}
