@@ -5,7 +5,8 @@ import { Check, Trash2 } from 'lucide-react'
 import { Field, Modal, MoneyInput } from '@/components/ui/kit'
 import { Button } from '@/components/ui/button'
 import { useAuth, useData, useToast, type CashMovementInput } from '@/components/providers'
-import { METHOD_LABEL, PAYMENT_METHODS } from '@/lib/derive'
+import { dayKey, METHOD_LABEL, PAYMENT_METHODS } from '@/lib/derive'
+import { buildCashEntries, cashSummary, methodPool } from '@/lib/cash'
 import { isoFromInputDate, money, parseAmount, toInputDate } from '@/lib/format'
 import type { CashMovement } from '@/lib/types'
 
@@ -23,7 +24,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 }
 
 export function CashMovementModal({ movement, close }: { movement?: CashMovement | null; close: () => void }) {
-  const { createCashMovement, updateCashMovement, deleteCashMovement } = useData()
+  const { payments, loans, cashMovements, settings, createCashMovement, updateCashMovement, deleteCashMovement } = useData()
   const { user } = useAuth()
   const notify = useToast()
   const isAdmin = user?.role === 'admin'
@@ -46,6 +47,19 @@ export function CashMovementModal({ movement, close }: { movement?: CashMovement
   async function onSave() {
     const value = parseAmount(amount)
     if (value <= 0) return setError('El monto debe ser mayor a 0.')
+    if (type === 'egreso') {
+      const pool = methodPool(method)
+      const poolLabel = pool === 'efectivo' ? 'efectivo en caja' : 'cuenta (digital)'
+      const summary = cashSummary(buildCashEntries(payments, loans, cashMovements), settings, dayKey(isoFromInputDate(date)))
+      let available = pool === 'efectivo' ? summary.cash : summary.digital
+      if (movement && methodPool((movement.method as string) || 'efectivo') === pool) {
+        available += Number(movement.amount) || 0
+      }
+      if (value > available) {
+        setError(`No hay saldo suficiente en ${poolLabel} (disponible ${money(available)}). Registra un aporte antes de continuar.`)
+        return
+      }
+    }
     setSaving(true)
     setError('')
     const payload: CashMovementInput = {

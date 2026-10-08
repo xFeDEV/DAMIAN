@@ -24,7 +24,7 @@ import {
   moraTotal,
   todayKey,
 } from '@/lib/derive'
-import { buildCashEntries, cashSummary } from '@/lib/cash'
+import { buildCashEntries, cashSummary, isInitialPayment } from '@/lib/cash'
 import { compactMoney, formatDate, formatLongDate, money, relativeTime } from '@/lib/format'
 
 const DONUT_COLORS: Record<string, string> = {
@@ -57,7 +57,7 @@ export default function DashboardView() {
       .reduce((sum, item) => sum + installmentOutstanding(item), 0)
     const vencido = moraTotal(installments, today)
     const recaudadoMes = payments
-      .filter((payment) => isSameMonth(payment.paid_at, today))
+      .filter((payment) => !isInitialPayment(payment) && isSameMonth(payment.paid_at, today))
       .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0)
     return { carteraActiva, cobrarHoy, vencido, recaudadoMes }
   }, [loans, installments, payments, today])
@@ -69,7 +69,9 @@ export default function DashboardView() {
       return date
     })
     const values = days.map((date) =>
-      payments.filter((payment) => isSameDay(payment.paid_at, date)).reduce((sum, payment) => sum + payment.amount, 0),
+      payments
+        .filter((payment) => !isInitialPayment(payment) && isSameDay(payment.paid_at, date))
+        .reduce((sum, payment) => sum + payment.amount, 0),
     )
     const max = Math.max(1, ...values)
     return { values, heights: values.map((value) => Math.max(4, Math.round((value / max) * 100))), max }

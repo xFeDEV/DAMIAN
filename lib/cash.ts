@@ -108,7 +108,11 @@ export interface CashSummary {
 }
 
 export function cashSummary(entries: CashEntry[], settings: Settings | null, asOfDay = todayKey()): CashSummary {
-  const startDay = dayKey(settings?.cash_start_date) || asOfDay
+  // Sin fecha de inicio explicita, arranca desde el primer movimiento (no desde
+  // hoy) para no ignorar el historial.
+  const explicitStart = dayKey(settings?.cash_start_date)
+  const earliest = entries.length > 0 ? entries.reduce((min, entry) => (entry.day < min ? entry.day : min), entries[0].day) : ''
+  const startDay = explicitStart || earliest || asOfDay
   let cash = Number(settings?.cash_initial_cash) || 0
   let digital = Number(settings?.cash_initial_digital) || 0
   const income = { cash: 0, digital: 0 }

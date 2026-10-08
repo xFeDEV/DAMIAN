@@ -42,6 +42,77 @@ export const METHOD_LABEL: Record<string, string> = {
 export const PAYMENT_METHODS = ['efectivo', 'transferencia', 'nequi', 'daviplata', 'otro'] as const
 export const FREQUENCIES = ['diaria', 'semanal', 'quincenal', 'mensual'] as const
 
+/* ----------------------- Calendario (sin domingos) ----------------------- */
+
+// Los domingos no hay cobro: ninguna cuota puede vencer en domingo.
+export function isSunday(date: Date) {
+  return date.getDay() === 0
+}
+
+export function addBusinessDays(base: Date, delta: number) {
+  const date = new Date(base)
+  const step = delta >= 0 ? 1 : -1
+  let remaining = Math.abs(delta)
+  while (remaining > 0) {
+    date.setDate(date.getDate() + step)
+    if (date.getDay() !== 0) remaining -= 1
+  }
+  return date
+}
+
+export function snapBusinessDay(base: Date) {
+  const date = new Date(base)
+  if (date.getDay() === 0) date.setDate(date.getDate() + 1)
+  return date
+}
+
+// Genera el calendario de cuotas lunes-sabado. `anchor` es la fecha de la cuota
+// #(anchorIndex + 1) (la proxima a pagar). En "diaria" se avanza dia habil por
+// dia habil (saltando domingos, manteniendo el numero de cuotas y corriendo el
+// fin); en el resto de frecuencias se corre cualquier domingo al lunes.
+export function buildSchedule({
+  anchor,
+  anchorIndex,
+  count,
+  frequency,
+}: {
+  anchor: Date
+  anchorIndex: number
+  count: number
+  frequency: string
+}) {
+  if (count <= 0) return [] as Date[]
+  const days = FREQUENCY_DAYS[frequency] ?? 1
+
+  if (frequency === 'diaria') {
+    let first = new Date(anchor)
+    for (let i = 0; i < anchorIndex; i += 1) first = addBusinessDays(first, -1)
+    const dates: Date[] = []
+    let cursor = first
+    for (let i = 0; i < count; i += 1) {
+      dates.push(new Date(cursor))
+      cursor = addBusinessDays(cursor, 1)
+    }
+    return dates
+  }
+
+  const base = snapBusinessDay(anchor)
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(base)
+    date.setDate(date.getDate() + (index - anchorIndex) * days)
+    return snapBusinessDay(date)
+  })
+}
+
+// Reparte el total entre las cuotas de modo que la ultima absorba el residuo
+// del redondeo (evita que el credito nunca llegue a saldo 0).
+export function installmentAmounts(total: number, count: number, base: number) {
+  if (count <= 0) return { base, rows: [] as number[] }
+  const nominal = base > 0 ? base : Math.round(total / count)
+  const rows = Array.from({ length: count }, (_, index) => (index === count - 1 ? total - nominal * (count - 1) : nominal))
+  return { base: nominal, rows }
+}
+
 export const ACTIVITY_LABEL: Record<string, string> = {
   'payment.created': 'Pago registrado',
   'payment.updated': 'Pago actualizado',

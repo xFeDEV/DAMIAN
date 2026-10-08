@@ -8,6 +8,7 @@ import { DataTable, Empty, Head, Stat } from '@/components/ui/kit'
 import { PaymentDetailModal } from '@/components/modals/payment-detail'
 import { useAuth, useData, useLookups, useToast, useToday } from '@/components/providers'
 import { METHOD_LABEL, isSameDay, isSameMonth } from '@/lib/derive'
+import { isInitialPayment } from '@/lib/cash'
 import { downloadCSV, formatDate, money, normalize } from '@/lib/format'
 
 const PAYMENT_FILTERS: Record<string, string> = {
@@ -35,23 +36,35 @@ export default function PaymentsView() {
   const stats = useMemo(() => {
     const weekAgo = new Date(today)
     weekAgo.setDate(weekAgo.getDate() - 7)
+    const weekTime = weekAgo.getTime()
+    const now = Date.now()
+    // Los pagos "Saldo inicial" son cuotas de apertura, no recaudo real.
+    const real = payments.filter((payment) => !isInitialPayment(payment))
     return {
-      today: payments.filter((payment) => isSameDay(payment.paid_at, today)).reduce((sum, payment) => sum + payment.amount, 0),
-      week: payments
-        .filter((payment) => new Date(payment.paid_at.replace(' ', 'T')).getTime() >= weekAgo.getTime())
+      today: real.filter((payment) => isSameDay(payment.paid_at, today)).reduce((sum, payment) => sum + payment.amount, 0),
+      week: real
+        .filter((payment) => {
+          const time = new Date(payment.paid_at.replace(' ', 'T')).getTime()
+          return time >= weekTime && time <= now
+        })
         .reduce((sum, payment) => sum + payment.amount, 0),
-      month: payments.filter((payment) => isSameMonth(payment.paid_at, today)).reduce((sum, payment) => sum + payment.amount, 0),
+      month: real.filter((payment) => isSameMonth(payment.paid_at, today)).reduce((sum, payment) => sum + payment.amount, 0),
     }
   }, [payments, today])
 
   const rows = useMemo(() => {
-    let base = payments
-    if (filtro === 'mes') base = payments.filter((payment) => isSameMonth(payment.paid_at, today))
-    else if (filtro === 'hoy') base = payments.filter((payment) => isSameDay(payment.paid_at, today))
+    let base = payments.filter((payment) => !isInitialPayment(payment))
+    const now = Date.now()
+    const weekAgo = new Date(today)
+    weekAgo.setDate(weekAgo.getDate() - 7)
+    const weekTime = weekAgo.getTime()
+    if (filtro === 'mes') base = base.filter((payment) => isSameMonth(payment.paid_at, today))
+    else if (filtro === 'hoy') base = base.filter((payment) => isSameDay(payment.paid_at, today))
     else if (filtro === 'semana') {
-      const weekAgo = new Date(today)
-      weekAgo.setDate(weekAgo.getDate() - 7)
-      base = payments.filter((payment) => new Date(payment.paid_at.replace(' ', 'T')).getTime() >= weekAgo.getTime())
+      base = base.filter((payment) => {
+        const time = new Date(payment.paid_at.replace(' ', 'T')).getTime()
+        return time >= weekTime && time <= now
+      })
     }
 
     const term = normalize(query.trim())

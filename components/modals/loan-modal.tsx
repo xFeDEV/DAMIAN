@@ -6,15 +6,21 @@ import { Check, ChevronDown, Search } from 'lucide-react'
 import { Badge, Field, Modal, MoneyInput } from '@/components/ui/kit'
 import { Button } from '@/components/ui/button'
 import { useData, useToast, type InstallmentInput, type LoanInput } from '@/components/providers'
-import { INSTALLMENT_STATUS_LABEL, FREQUENCIES, FREQUENCY_DAYS, FREQUENCY_LABEL, installmentOutstanding, isOverdue, METHOD_LABEL, PAYMENT_METHODS } from '@/lib/derive'
+import {
+  buildSchedule,
+  dayKey,
+  FREQUENCIES,
+  FREQUENCY_LABEL,
+  installmentAmounts,
+  INSTALLMENT_STATUS_LABEL,
+  installmentOutstanding,
+  isOverdue,
+  METHOD_LABEL,
+  PAYMENT_METHODS,
+} from '@/lib/derive'
+import { buildCashEntries, cashSummary, methodPool } from '@/lib/cash'
 import { formatDate, isoFromInputDate, money, normalize, parseAmount, toInputDate } from '@/lib/format'
 import type { Loan, LoanFrequency, LoanStatus, PaymentMethod } from '@/lib/types'
-
-function addDays(base: Date, days: number) {
-  const date = new Date(base)
-  date.setDate(date.getDate() + days)
-  return date
-}
 
 function parseRate(value: string) {
   const rate = Number(String(value).replace(',', '.'))
@@ -32,7 +38,7 @@ export function LoanModal({
   loan?: Loan | null
   onCreated?: (loanId: string) => void
 }) {
-  const { clients, installments, payments, createLoan, updateLoan } = useData()
+  const { clients, installments, payments, loans, cashMovements, settings, createLoan, updateLoan } = useData()
   const notify = useToast()
   const router = useRouter()
 
@@ -110,10 +116,20 @@ export function LoanModal({
   const dates = useMemo(() => {
     const countValue = Number(count) || 0
     if (!nextDue || countValue <= 0) return [] as Date[]
-    const anchor = new Date(`${nextDue}T00:00:00`)
-    const days = FREQUENCY_DAYS[frequency] ?? 1
-    return Array.from({ length: countValue }, (_, index) => addDays(anchor, (index - anchorIndex) * days))
+    return buildSchedule({
+      anchor: new Date(`${nextDue}T00:00:00`),
+      anchorIndex,
+      count: countValue,
+      frequency,
+    })
   }, [nextDue, count, frequency, anchorIndex])
+
+  // La ultima cuota absorbe el residuo del redondeo para que la suma cuadre con
+  // el total y el credito pueda llegar a saldo 0.
+  const schedule = useMemo(
+    () => installmentAmounts(parseAmount(total), countValue, Number(installment) || 0),
+    [total, countValue, installment],
+  )
 
   function next() {
     setError('')
@@ -142,6 +158,27 @@ export function LoanModal({
       const amountValue = parseAmount(amount)
       const totalValue = parseAmount(total)
       const installmentValue = parseAmount(installment)
+
+      // No se puede desembolsar mas de lo disponible en el pool (efectivo/cuenta).
+      const pool = methodPool(disbursementMethod)
+      const poolLabel = pool === 'efectivo' ? 'efectivo' : 'cuenta (digital)'
+      const summary = cashSummary(
+        buildCashEntries(payments, loans, cashMovements),
+        settings,
+        dayKey(isoFromInputDate(disbursed)),
+      )
+      let available = pool === 'efectivo' ? summary.cash : summary.digital
+      if (loan && methodPool((loan.disbursement_method as string) || 'efectivo') === pool) {
+        available += Number(loan.amount) || 0
+      }
+      if (amountValue > available) {
+        setError(
+          `No hay saldo suficiente en ${poolLabel} para desembolsar ${money(amountValue)} (disponible ${money(available)}). Registra un aporte o cambia el método.`,
+        )
+        setSaving(false)
+        return
+      }
+
       const payload: LoanInput = {
         client: targetClientId,
         amount: amountValue,
@@ -161,7 +198,7 @@ export function LoanModal({
       const installmentRows: InstallmentInput[] = dates.map((date, index) => ({
         number: index + 1,
         due_date: isoFromInputDate(toInputDate(date.toISOString())),
-        amount: installmentValue,
+        amount: schedule.rows[index] ?? installmentValue,
       }))
       if (loan) {
         await updateLoan(loan.id, payload, installmentRows)

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   Bell,
   CalendarClock,
+  CalendarRange,
   ChevronLeft,
   Coins,
   FileBarChart,
@@ -33,6 +34,7 @@ const NAV = [
   ['/cuotas', 'Cuotas', CalendarClock],
   ['/pagos', 'Pagos', Receipt],
   ['/caja', 'Caja', Coins],
+  ['/cierres', 'Cierres', CalendarRange],
   ['/cartera', 'Cartera', Landmark],
   ['/reportes', 'Reportes', FileBarChart],
 ] as const

@@ -176,5 +176,10 @@
 .audit-change .after{color:var(--pos-text)}
 .cash-asof{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 20px;margin-bottom:20px}
 .cash-asof input{height:38px;border:1px solid var(--input);border-radius:8px;background:var(--surface);color:var(--foreground);padding:0 11px;font:inherit}
+.week-nav{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 20px;margin-bottom:20px}
+.week-nav>div{display:flex;flex-direction:column;line-height:1.3;margin-right:auto}
+.week-nav>div b{font-size:15px}
+.week-nav>div span{font-size:12px;color:var(--text-faint)}
+.week-nav .icon-btn:disabled{opacity:.4;cursor:not-allowed}
 .detail-authorship{color:var(--text-faint);font-size:12px;line-height:1.7;margin-top:6px}
 .detail-authorship b{color:var(--text-secondary)}

@@ -339,7 +339,9 @@ function DataProvider({ children }: { children: React.ReactNode }) {
       const code = computeNextCode('PR', data.loans.map((item) => item.code))
       const { paid_installments: paidInstallmentsInput, status: statusInput, ...loanFields } = loan
       const paidCount = Math.max(0, Math.min(paidInstallmentsInput ?? 0, loan.installments_count))
-      const paidTotal = paidCount * loan.installment_amount
+      const paidTotal = installments
+        .filter((item) => item.number <= paidCount)
+        .reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
       const balance = Math.max(0, loan.total - paidTotal)
       const status: LoanStatus = balance <= 0 ? 'finalizado' : statusInput || 'activo'
       const record = await pb.collection('loans').create<Loan>({
@@ -434,7 +436,9 @@ function DataProvider({ children }: { children: React.ReactNode }) {
       }
 
       const paidCount = Math.max(0, Math.min(paidInstallmentsInput ?? 0, loan.installments_count))
-      const paidTotal = paidCount * loan.installment_amount
+      const paidTotal = installments
+        .filter((item) => item.number <= paidCount)
+        .reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
       const balance = Math.max(0, loan.total - paidTotal)
       const status: LoanStatus = balance <= 0 ? 'finalizado' : statusInput || 'activo'
       const record = await pb.collection('loans').update<Loan>(id, {
