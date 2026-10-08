@@ -21,7 +21,24 @@ export function methodPool(method?: string | null): CashPool {
 // Los pagos "Saldo inicial" son cuotas ya pagadas al cargar créditos: no son
 // dinero recibido, por eso no entran en la caja.
 export function isInitialPayment(payment: Payment) {
+  if (payment.kind) return payment.kind === 'saldo_inicial'
   return /^saldo inicial/i.test(String(payment.notes || '').trim())
+}
+
+// Solo los pagos 'real' representan dinero realmente recibido. Los de apertura,
+// volteo (refinanciacion) o ajuste son movimientos de cartera, no de caja.
+export function isRealPayment(payment: Payment) {
+  if (payment.kind) return payment.kind === 'real'
+  return !isInitialPayment(payment)
+}
+
+// Efectivo realmente entregado por un crédito (en un volteo es capital - saldo
+// refinanciado). Cae a `amount` si el campo no está.
+export function loanDisbursed(loan: Loan) {
+  const value = Number(loan.disbursement_amount)
+  if (Number.isFinite(value) && value > 0) return value
+  if (loan.disbursement_amount === 0) return 0
+  return Number(loan.amount) || 0
 }
 
 export interface CashEntry {
@@ -43,7 +60,7 @@ export function buildCashEntries(payments: Payment[], loans: Loan[], movements: 
   const entries: CashEntry[] = []
 
   for (const payment of payments) {
-    if (isInitialPayment(payment)) continue
+    if (!isRealPayment(payment)) continue
     const day = dayKey(payment.paid_at)
     if (!day) continue
     entries.push({
@@ -72,7 +89,7 @@ export function buildCashEntries(payments: Payment[], loans: Loan[], movements: 
       category: 'desembolso',
       method: loan.disbursement_method || 'efectivo',
       pool: methodPool(loan.disbursement_method),
-      amount: Number(loan.amount) || 0,
+      amount: loanDisbursed(loan),
       description: '',
       ref: { type: 'loan', id: loan.id, code: loan.code },
       link: `/prestamos/${loan.id}`,
@@ -168,7 +185,7 @@ export interface RangeSummary {
 export function rangeSummary(payments: Payment[], loans: Loan[], fromKey: string, toKey: string): RangeSummary {
   const inRange = (day: string) => day !== '' && day >= fromKey && day <= toKey
   const filteredPayments = payments
-    .filter((payment) => !isInitialPayment(payment) && inRange(dayKey(payment.paid_at)))
+    .filter((payment) => isRealPayment(payment) && inRange(dayKey(payment.paid_at)))
     .sort((a, b) => dayKey(b.paid_at).localeCompare(dayKey(a.paid_at)))
   const filteredLoans = loans
     .filter((loan) => inRange(dayKey(loan.disbursed_at)))
@@ -196,7 +213,7 @@ export function rangeSummary(payments: Payment[], loans: Loan[], fromKey: string
 
   let prestado = 0
   for (const loan of filteredLoans) {
-    const amount = Number(loan.amount) || 0
+    const amount = loanDisbursed(loan)
     prestado += amount
     prestadoPool[methodPool(loan.disbursement_method)] += amount
     dayOf(dayKey(loan.disbursed_at)).prestado += amount

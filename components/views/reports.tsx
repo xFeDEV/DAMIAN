@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Head, Section } from '@/components/ui/kit'
 import { useData, useToast, useToday } from '@/components/providers'
 import { isSameDay, loanHasMora, moraTotal } from '@/lib/derive'
-import { isInitialPayment } from '@/lib/cash'
+import { isRealPayment } from '@/lib/cash'
 import { compactMoney, downloadCSV, formatDate, money } from '@/lib/format'
 
 export default function ReportsView() {
@@ -22,12 +22,12 @@ export default function ReportsView() {
     })
     const daily = days.map((date) =>
       payments
-        .filter((payment) => !isInitialPayment(payment) && isSameDay(payment.paid_at, date))
+        .filter((payment) => isRealPayment(payment) && isSameDay(payment.paid_at, date))
         .reduce((sum, payment) => sum + payment.amount, 0),
     )
     const max = Math.max(1, ...daily)
 
-    const active = loans.filter((loan) => (Number(loan.balance) || 0) > 0)
+    const active = loans.filter((loan) => (Number(loan.balance) || 0) > 0 && loan.status !== 'cancelado')
     const activeBalance = active.reduce((sum, loan) => sum + (Number(loan.balance) || 0), 0)
     const mora = moraTotal(installments, today)
     const overdue = active.filter((loan) => loanHasMora(loan.id, installments, today))

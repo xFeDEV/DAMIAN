@@ -17,7 +17,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { DataTable, Empty, Head, Section, Stat } from '@/components/ui/kit'
 import { useData, useLookups, useToday } from '@/components/providers'
-import { buildCashEntries, cashSummary, CASH_CATEGORY_LABEL, isInitialPayment, rangeSummary, type CashEntry } from '@/lib/cash'
+import { buildCashEntries, cashSummary, CASH_CATEGORY_LABEL, isRealPayment, loanDisbursed, rangeSummary, type CashEntry } from '@/lib/cash'
 import { dayKey, LOAN_STATUS_LABEL, METHOD_LABEL, moraTotal, todayKey } from '@/lib/derive'
 import { downloadCSV, formatDate, money, toInputDate } from '@/lib/format'
 import { addDaysKey, formatWeekRange, shiftWeek, weekDayKeys, weekEndKey, WEEKDAY_LABEL, weekStartKey } from '@/lib/week'
@@ -88,7 +88,7 @@ export default function ClosingsView() {
     const prevNet = prevIncome.total - prevExpense.total
 
     const weekPayments = payments.filter(
-      (payment) => !isInitialPayment(payment) && dayKey(payment.paid_at) >= startKey && dayKey(payment.paid_at) <= endKey,
+      (payment) => isRealPayment(payment) && dayKey(payment.paid_at) >= startKey && dayKey(payment.paid_at) <= endKey,
     )
     const weekLoans = loans.filter((loan) => dayKey(loan.disbursed_at) >= startKey && dayKey(loan.disbursed_at) <= endKey)
     const clientsServed = new Set(weekPayments.map((payment) => payment.client)).size
@@ -136,7 +136,7 @@ export default function ClosingsView() {
 
   const earliestKey = useMemo(() => {
     const days = [
-      ...payments.filter((payment) => !isInitialPayment(payment)).map((payment) => dayKey(payment.paid_at)),
+      ...payments.filter((payment) => isRealPayment(payment)).map((payment) => dayKey(payment.paid_at)),
       ...loans.map((loan) => dayKey(loan.disbursed_at)),
     ].filter(Boolean)
     return days.length > 0 ? days.reduce((min, day) => (day < min ? day : min)) : todayKey(new Date(2000, 0, 1))
@@ -177,7 +177,7 @@ export default function ClosingsView() {
       [],
       ['Pagos registrados', report.weekPayments.length],
       ['Créditos desembolsados', report.weekLoans.length],
-      ['Monto desembolsado', report.weekLoans.reduce((sum, loan) => sum + (Number(loan.amount) || 0), 0)],
+      ['Monto desembolsado', report.weekLoans.reduce((sum, loan) => sum + loanDisbursed(loan), 0)],
       ['Clientes atendidos', report.clientsServed],
       ['Mora al cierre', report.mora],
     ])
@@ -479,7 +479,7 @@ export default function ClosingsView() {
               <div>
                 <i className="lg blue" />
                 <span>Monto desembolsado</span>
-                <b>{money(report.weekLoans.reduce((sum, loan) => sum + (Number(loan.amount) || 0), 0))}</b>
+                <b>{money(report.weekLoans.reduce((sum, loan) => sum + loanDisbursed(loan), 0))}</b>
               </div>
               <div>
                 <i className="lg amber" />

@@ -2,9 +2,11 @@ import type { RecordModel } from 'pocketbase'
 
 export type OperatorRole = 'admin' | 'cobrador'
 export type LoanFrequency = 'diaria' | 'semanal' | 'quincenal' | 'mensual'
-export type LoanStatus = 'pendiente' | 'activo' | 'en_mora' | 'finalizado'
+export type LoanStatus = 'pendiente' | 'activo' | 'en_mora' | 'finalizado' | 'cancelado'
+export type LoanOrigin = 'nuevo' | 'volteo' | 'correccion'
 export type InstallmentStatus = 'pendiente' | 'parcial' | 'vencida' | 'pagada'
 export type PaymentMethod = 'efectivo' | 'transferencia' | 'nequi' | 'daviplata' | 'otro'
+export type PaymentKind = 'real' | 'saldo_inicial' | 'refinanciacion' | 'ajuste'
 
 export interface Operator extends RecordModel {
   email: string
@@ -47,6 +49,12 @@ export interface Loan extends RecordModel {
   created_by: string
   updated_by: string
   notes: string
+  disbursement_amount: number
+  origin: LoanOrigin | ''
+  refinanced_from: string
+  refinanced_amount: number
+  cancel_reason: string
+  cancelled_at: string
 }
 
 export interface Installment extends RecordModel {
@@ -71,6 +79,7 @@ export interface Payment extends RecordModel {
   notes: string
   created_by: string
   receipt: string
+  kind: PaymentKind | ''
 }
 
 export interface Settings extends RecordModel {

@@ -39,7 +39,7 @@ export default function LoansView() {
   const isAdmin = user?.role === 'admin'
 
   const stats = useMemo(() => {
-    const active = loans.filter((loan) => loan.status !== 'finalizado')
+    const active = loans.filter((loan) => loan.status !== 'finalizado' && loan.status !== 'cancelado')
     return {
       total: loans.reduce((sum, loan) => sum + (Number(loan.amount) || 0), 0),
       activeCount: active.length,
@@ -50,11 +50,11 @@ export default function LoansView() {
 
   const filtered = useMemo(() => {
     let base = loans
-    if (filtro === 'activos') base = loans.filter((loan) => (Number(loan.balance) || 0) > 0)
-    else if (filtro === 'finalizados') base = loans.filter((loan) => (Number(loan.balance) || 0) <= 0)
+    if (filtro === 'activos') base = loans.filter((loan) => (Number(loan.balance) || 0) > 0 && loan.status !== 'cancelado')
+    else if (filtro === 'finalizados') base = loans.filter((loan) => (Number(loan.balance) || 0) <= 0 || loan.status === 'cancelado')
     else if (filtro === 'aldia')
-      base = loans.filter((loan) => (Number(loan.balance) || 0) > 0 && !loanHasMora(loan.id, installments, today))
-    else if (filtro === 'mora') base = loans.filter((loan) => loanHasMora(loan.id, installments, today))
+      base = loans.filter((loan) => (Number(loan.balance) || 0) > 0 && loan.status !== 'cancelado' && !loanHasMora(loan.id, installments, today))
+    else if (filtro === 'mora') base = loans.filter((loan) => loan.status !== 'cancelado' && loanHasMora(loan.id, installments, today))
 
     const term = normalize(query.trim())
     if (!term) return base

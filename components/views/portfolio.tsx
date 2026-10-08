@@ -26,7 +26,7 @@ export default function PortfolioView() {
   const [payLoan, setPayLoan] = useState('')
 
   const data = useMemo(() => {
-    const active = loans.filter((loan) => (Number(loan.balance) || 0) > 0)
+    const active = loans.filter((loan) => (Number(loan.balance) || 0) > 0 && loan.status !== 'cancelado')
     const overdue = active.filter((loan) => loanHasMora(loan.id, installments, today))
     const sumBalance = (items: typeof active) => items.reduce((sum, loan) => sum + (Number(loan.balance) || 0), 0)
     const activeBalance = sumBalance(active)

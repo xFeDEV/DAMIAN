@@ -181,6 +181,29 @@ export interface RescheduleInput {
   shift_following?: boolean
 }
 
+export interface RolloverInput {
+  oldLoan: string
+  code: string
+  amount: number
+  total: number
+  installment_amount: number
+  frequency: string
+  disbursed_at: string
+  disbursement_method: string
+  start_at: string
+  end_at: string
+  interest_rate?: number
+  notes?: string
+  installments: { number: number; due_date: string; amount: number }[]
+}
+
+export interface MarkRolloverInput {
+  newLoan: string
+  oldLoan: string
+  payment: string
+  refinanced_amount: number
+}
+
 interface DataContextValue extends DataSnapshot {
   loading: boolean
   error: string | null
@@ -197,6 +220,11 @@ interface DataContextValue extends DataSnapshot {
   updateCashMovement: (id: string, input: CashMovementInput) => Promise<CashMovement>
   deleteCashMovement: (id: string) => Promise<void>
   rescheduleInstallment: (input: RescheduleInput) => Promise<void>
+  rolloverLoan: (input: RolloverInput) => Promise<void>
+  cancelLoan: (id: string, reason: string) => Promise<void>
+  markRollover: (input: MarkRolloverInput) => Promise<void>
+  markCorrection: (loanId: string, paymentId: string) => Promise<void>
+  unmarkLoan: (loanId: string, paymentId?: string) => Promise<void>
   updateInstallmentNote: (id: string, reason: string) => Promise<void>
   deleteInstallmentNote: (id: string) => Promise<void>
   updateSettings: (id: string, input: Partial<Settings>) => Promise<Settings>
@@ -399,11 +427,13 @@ function DataProvider({ children }: { children: React.ReactNode }) {
         const record = await pb.collection('loans').update<Loan>(id, {
           opening_balance: loan.total,
           balance,
-          paid_total: paidTotal,
-          base_paid: basePaid,
-          status,
-          ...loanFields,
-        })
+        paid_total: paidTotal,
+        base_paid: 0,
+        status,
+        disbursement_amount: loan.amount,
+        origin: 'nuevo',
+        ...loanFields,
+      })
 
         const existing = data.installments
           .filter((item) => item.loan === id)
@@ -494,6 +524,7 @@ function DataProvider({ children }: { children: React.ReactNode }) {
         created_by: user?.id ?? '',
         reference: '',
         notes: '',
+        kind: 'real',
         ...fields,
         ...(receipt ? { receipt } : {}),
       })
@@ -571,6 +602,74 @@ function DataProvider({ children }: { children: React.ReactNode }) {
     [refresh],
   )
 
+  const rolloverLoan = useCallback(
+    async (input: RolloverInput) => {
+      await pb.send(`/api/damian/loans/${input.oldLoan}/rollover`, {
+        method: 'POST',
+        body: {
+          code: input.code,
+          amount: input.amount,
+          total: input.total,
+          installment_amount: input.installment_amount,
+          frequency: input.frequency,
+          disbursed_at: input.disbursed_at,
+          disbursement_method: input.disbursement_method,
+          start_at: input.start_at,
+          end_at: input.end_at,
+          interest_rate: input.interest_rate ?? 0,
+          notes: input.notes ?? '',
+          installments: input.installments,
+        },
+      })
+      await refresh()
+    },
+    [refresh],
+  )
+
+  const cancelLoan = useCallback(
+    async (id: string, reason: string) => {
+      await pb.send(`/api/damian/loans/${id}/cancel`, {
+        method: 'POST',
+        body: { reason },
+      })
+      await refresh()
+    },
+    [refresh],
+  )
+
+  const markRollover = useCallback(
+    async (input: MarkRolloverInput) => {
+      await pb.send(`/api/damian/loans/${input.newLoan}/mark-rollover`, {
+        method: 'POST',
+        body: { old_loan: input.oldLoan, payment: input.payment, refinanced_amount: input.refinanced_amount },
+      })
+      await refresh()
+    },
+    [refresh],
+  )
+
+  const markCorrection = useCallback(
+    async (loanId: string, paymentId: string) => {
+      await pb.send(`/api/damian/loans/${loanId}/mark-correction`, {
+        method: 'POST',
+        body: { payment: paymentId },
+      })
+      await refresh()
+    },
+    [refresh],
+  )
+
+  const unmarkLoan = useCallback(
+    async (loanId: string, paymentId?: string) => {
+      await pb.send(`/api/damian/loans/${loanId}/unmark`, {
+        method: 'POST',
+        body: { payment: paymentId ?? '' },
+      })
+      await refresh()
+    },
+    [refresh],
+  )
+
   const updateInstallmentNote = useCallback(
     async (id: string, reason: string) => {
       await pb.collection('installment_notes').update(id, { reason })
@@ -620,6 +719,11 @@ function DataProvider({ children }: { children: React.ReactNode }) {
         updateCashMovement,
         deleteCashMovement,
         rescheduleInstallment,
+        rolloverLoan,
+        cancelLoan,
+        markRollover,
+        markCorrection,
+        unmarkLoan,
         updateInstallmentNote,
         deleteInstallmentNote,
         updateSettings,
@@ -695,6 +799,7 @@ async function materializePaidInstallments(
       created_by: operatorId ?? '',
       reference: '',
       notes: INITIAL_PAYMENT_NOTE,
+      kind: 'saldo_inicial',
     })
   }
 }

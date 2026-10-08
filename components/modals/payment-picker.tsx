@@ -18,7 +18,7 @@ export function PaymentPicker({ close }: { close: () => void }) {
   const options = useMemo(() => {
     const term = normalize(query.trim())
     return loans
-      .filter((loan) => (Number(loan.balance) || 0) > 0)
+      .filter((loan) => (Number(loan.balance) || 0) > 0 && loan.status !== 'cancelado')
       .map((loan) => {
         const pending = installments
           .filter((item) => item.loan === loan.id && installmentOutstanding(item) > 0)

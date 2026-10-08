@@ -8,7 +8,7 @@ import { DataTable, Empty, Head, Stat } from '@/components/ui/kit'
 import { PaymentDetailModal } from '@/components/modals/payment-detail'
 import { useAuth, useData, useLookups, useToast, useToday } from '@/components/providers'
 import { METHOD_LABEL, isSameDay, isSameMonth } from '@/lib/derive'
-import { isInitialPayment } from '@/lib/cash'
+import { isRealPayment } from '@/lib/cash'
 import { downloadCSV, formatDate, money, normalize } from '@/lib/format'
 
 const PAYMENT_FILTERS: Record<string, string> = {
@@ -39,7 +39,7 @@ export default function PaymentsView() {
     const weekTime = weekAgo.getTime()
     const now = Date.now()
     // Los pagos "Saldo inicial" son cuotas de apertura, no recaudo real.
-    const real = payments.filter((payment) => !isInitialPayment(payment))
+    const real = payments.filter((payment) => isRealPayment(payment))
     return {
       today: real.filter((payment) => isSameDay(payment.paid_at, today)).reduce((sum, payment) => sum + payment.amount, 0),
       week: real
@@ -53,7 +53,7 @@ export default function PaymentsView() {
   }, [payments, today])
 
   const rows = useMemo(() => {
-    let base = payments.filter((payment) => !isInitialPayment(payment))
+    let base = payments.filter((payment) => isRealPayment(payment))
     const now = Date.now()
     const weekAgo = new Date(today)
     weekAgo.setDate(weekAgo.getDate() - 7)

@@ -24,7 +24,7 @@ import {
   moraTotal,
   todayKey,
 } from '@/lib/derive'
-import { buildCashEntries, cashSummary, isInitialPayment } from '@/lib/cash'
+import { buildCashEntries, cashSummary, isRealPayment } from '@/lib/cash'
 import { compactMoney, formatDate, formatLongDate, money, relativeTime } from '@/lib/format'
 
 const DONUT_COLORS: Record<string, string> = {
@@ -49,7 +49,7 @@ export default function DashboardView() {
   )
 
   const stats = useMemo(() => {
-    const activeLoans = loans.filter((loan) => loan.status !== 'finalizado')
+    const activeLoans = loans.filter((loan) => loan.status !== 'finalizado' && loan.status !== 'cancelado')
     const pending = installments.filter((item) => installmentOutstanding(item) > 0)
     const carteraActiva = activeLoans.reduce((sum, loan) => sum + (Number(loan.balance) || 0), 0)
     const cobrarHoy = pending
@@ -57,7 +57,7 @@ export default function DashboardView() {
       .reduce((sum, item) => sum + installmentOutstanding(item), 0)
     const vencido = moraTotal(installments, today)
     const recaudadoMes = payments
-      .filter((payment) => !isInitialPayment(payment) && isSameMonth(payment.paid_at, today))
+      .filter((payment) => isRealPayment(payment) && isSameMonth(payment.paid_at, today))
       .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0)
     return { carteraActiva, cobrarHoy, vencido, recaudadoMes }
   }, [loans, installments, payments, today])
@@ -70,7 +70,7 @@ export default function DashboardView() {
     })
     const values = days.map((date) =>
       payments
-        .filter((payment) => !isInitialPayment(payment) && isSameDay(payment.paid_at, date))
+        .filter((payment) => isRealPayment(payment) && isSameDay(payment.paid_at, date))
         .reduce((sum, payment) => sum + payment.amount, 0),
     )
     const max = Math.max(1, ...values)

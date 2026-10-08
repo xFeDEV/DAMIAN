@@ -2,10 +2,13 @@
 
 import { useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Banknote, CheckCircle2, ChevronLeft, CircleDollarSign, Pencil, Plus, Trash2, WalletCards } from 'lucide-react'
+import { Ban, Banknote, CheckCircle2, ChevronLeft, CircleDollarSign, Pencil, Plus, Repeat, Trash2, WalletCards, Wrench } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge, DataTable, Empty, Stat } from '@/components/ui/kit'
 import { LoanModal } from '@/components/modals/loan-modal'
+import { RolloverModal } from '@/components/modals/rollover-modal'
+import { CancelLoanModal } from '@/components/modals/cancel-loan-modal'
+import { CorrectionModal } from '@/components/modals/correction-modal'
 import { PaymentModal } from '@/components/modals/payment-modal'
 import { PaymentDetailModal } from '@/components/modals/payment-detail'
 import { NonPaymentModal } from '@/components/modals/non-payment-modal'
@@ -36,6 +39,9 @@ export default function LoanDetailView() {
   const [showPayment, setShowPayment] = useState(false)
   const [paymentNumber, setPaymentNumber] = useState<number | undefined>()
   const [showEdit, setShowEdit] = useState(false)
+  const [showRollover, setShowRollover] = useState(false)
+  const [showCancel, setShowCancel] = useState(false)
+  const [showCorrection, setShowCorrection] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [noteFor, setNoteFor] = useState('')
   const [paymentDetail, setPaymentDetail] = useState<{ paymentId: string; installmentNumber: number; coveredAmount: number } | null>(null)
@@ -131,28 +137,48 @@ export default function LoanDetailView() {
             {formatTimestampDate(loan.updated)}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 9 }}>
-          {isAdmin && (
+        <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+          {isAdmin && loan.status !== 'cancelado' && (
+            <Button variant="outline" onClick={() => setShowCancel(true)}>
+              <Ban data-icon="inline-start" />
+              Cancelar
+            </Button>
+          )}
+          {isAdmin && loan.status !== 'cancelado' && (
             <Button variant="destructive" onClick={onDeleteLoan} disabled={deleting}>
               <Trash2 data-icon="inline-start" />
               Eliminar
             </Button>
           )}
-          {isAdmin && (
+          {isAdmin && loan.status !== 'cancelado' && (
             <Button variant="outline" onClick={() => setShowEdit(true)}>
               <Pencil data-icon="inline-start" />
               Editar
             </Button>
           )}
-          <Button
-            onClick={() => {
-              setPaymentNumber(undefined)
-              setShowPayment(true)
-            }}
-          >
-            <Banknote data-icon="inline-start" />
-            Registrar pago
-          </Button>
+          {isAdmin && loan.status !== 'cancelado' && (Number(loan.balance) || 0) > 0 && (
+            <Button variant="outline" onClick={() => setShowRollover(true)}>
+              <Repeat data-icon="inline-start" />
+              Voltear
+            </Button>
+          )}
+          {isAdmin && (
+            <Button variant="outline" onClick={() => setShowCorrection(true)}>
+              <Wrench data-icon="inline-start" />
+              Corregir
+            </Button>
+          )}
+          {loan.status !== 'cancelado' && (
+            <Button
+              onClick={() => {
+                setPaymentNumber(undefined)
+                setShowPayment(true)
+              }}
+            >
+              <Banknote data-icon="inline-start" />
+              Registrar pago
+            </Button>
+          )}
         </div>
       </div>
 
@@ -162,6 +188,23 @@ export default function LoanDetailView() {
         <Stat label="Total pagado" value={money(loan.paid_total)} icon={CheckCircle2} tone="green" />
         <Stat label="Saldo pendiente" value={money(loan.balance)} icon={CircleDollarSign} tone="amber" />
       </div>
+
+      {(loan.origin === 'volteo' || loan.status === 'cancelado') && (
+        <div className="card" style={{ padding: '14px 20px' }}>
+          {loan.origin === 'volteo' && (
+            <p className="center-note" style={{ textAlign: 'left', margin: 0 }}>
+              <b>Volteo:</b> saldo refinanciado {money(loan.refinanced_amount)} · efectivo realmente entregado{' '}
+              {money(loan.disbursement_amount)}. El saldo anterior no entró a caja.
+            </p>
+          )}
+          {loan.status === 'cancelado' && (
+            <p className="center-note" style={{ textAlign: 'left', margin: loan.origin === 'volteo' ? '8px 0 0' : 0 }}>
+              <b>Cancelado:</b> {loan.cancel_reason || 'sin motivo'}
+              {loan.cancelled_at ? ` · ${formatTimestampDate(loan.cancelled_at)}` : ''}.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="card loan-overview">
         <div className="section-head">
@@ -337,6 +380,9 @@ export default function LoanDetailView() {
         <PaymentModal loanId={loan.id} uptoInstallmentNumber={paymentNumber} close={() => setShowPayment(false)} />
       )}
       {showEdit && <LoanModal loan={loan} close={() => setShowEdit(false)} />}
+      {showRollover && <RolloverModal loan={loan} close={() => setShowRollover(false)} />}
+      {showCancel && <CancelLoanModal loan={loan} close={() => setShowCancel(false)} />}
+      {showCorrection && <CorrectionModal loan={loan} close={() => setShowCorrection(false)} />}
       {paymentDetail && (
         <PaymentDetailModal
           paymentId={paymentDetail.paymentId}

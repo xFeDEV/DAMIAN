@@ -8,6 +8,7 @@ export const LOAN_STATUS_LABEL: Record<string, string> = {
   activo: 'Activo',
   en_mora: 'En mora',
   finalizado: 'Finalizado',
+  cancelado: 'Cancelado',
 }
 
 export const INSTALLMENT_STATUS_LABEL: Record<string, string> = {
@@ -118,20 +119,22 @@ export const ACTIVITY_LABEL: Record<string, string> = {
   'payment.updated': 'Pago actualizado',
   'payment.deleted': 'Pago eliminado',
   'loan.deleted': 'Crédito eliminado',
+  'loan.rollover': 'Volteo de crédito',
+  'loan.cancelled': 'Crédito cancelado',
   'client.deleted': 'Cliente eliminado',
 }
 
 export function badgeTone(status: string): Tone {
   if (['Al día', 'Pagada', 'Activo'].includes(status)) return 'good'
   if (['Pendiente', 'Parcial', 'Próxima', 'Pendiente'].includes(status)) return 'warn'
-  if (['Finalizado', 'Finalizada'].includes(status)) return 'muted'
+  if (['Finalizado', 'Finalizada', 'Cancelado'].includes(status)) return 'muted'
   return 'bad'
 }
 
 export function activityTone(action: string): string {
   if (action === 'payment.created') return 'green'
-  if (action === 'payment.updated') return 'blue'
-  if (action === 'payment.deleted' || action === 'loan.deleted' || action === 'client.deleted') return 'red'
+  if (action === 'payment.updated' || action === 'loan.rollover') return 'blue'
+  if (action === 'payment.deleted' || action === 'loan.deleted' || action === 'client.deleted' || action === 'loan.cancelled') return 'red'
   return 'purple'
 }
 
@@ -165,7 +168,7 @@ export interface ClientStats {
 }
 
 export function clientStats(loans: Loan[], installments: Installment[], reference = new Date()): ClientStats {
-  const active = loans.filter((loan) => loan.status !== 'finalizado')
+  const active = loans.filter((loan) => loan.status !== 'finalizado' && loan.status !== 'cancelado')
   const pendingInstallments = installments
     .filter((item) => installmentOutstanding(item) > 0)
     .sort((a, b) => new Date(a.due_date.replace(' ', 'T')).getTime() - new Date(b.due_date.replace(' ', 'T')).getTime())
@@ -270,6 +273,7 @@ export function effectiveInstallmentStatus(item: Installment, reference = new Da
 }
 
 export function effectiveLoanStatus(loan: Loan, installments: Installment[], reference = new Date()): LoanStatus {
+  if (loan.status === 'cancelado') return 'cancelado'
   if ((Number(loan.balance) || 0) <= 0) return 'finalizado'
   return loanHasMora(loan.id, installments, reference) ? 'en_mora' : 'activo'
 }
