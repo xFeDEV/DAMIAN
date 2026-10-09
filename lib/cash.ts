@@ -32,13 +32,13 @@ export function isRealPayment(payment: Payment) {
   return !isInitialPayment(payment)
 }
 
-// Efectivo realmente entregado por un crédito (en un volteo es capital - saldo
-// refinanciado). Cae a `amount` si el campo no está.
+// Efectivo realmente entregado por un crédito. En un volteo puede ser 0
+// (todo refinanciado). Para créditos normales, si el campo viene en 0/vacío se
+// usa el capital (amount) para no dejar de descontar de la caja.
 export function loanDisbursed(loan: Loan) {
-  const value = Number(loan.disbursement_amount)
-  if (Number.isFinite(value) && value > 0) return value
-  if (loan.disbursement_amount === 0) return 0
-  return Number(loan.amount) || 0
+  const value = Number(loan.disbursement_amount) || 0
+  if (loan.origin === 'volteo') return value
+  return value > 0 ? value : Number(loan.amount) || 0
 }
 
 export interface CashEntry {

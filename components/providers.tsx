@@ -379,6 +379,8 @@ function DataProvider({ children }: { children: React.ReactNode }) {
         paid_total: paidTotal,
         base_paid: 0,
         status,
+        disbursement_amount: loan.amount,
+        origin: 'nuevo',
         ...loanFields,
       })
 
@@ -427,13 +429,11 @@ function DataProvider({ children }: { children: React.ReactNode }) {
         const record = await pb.collection('loans').update<Loan>(id, {
           opening_balance: loan.total,
           balance,
-        paid_total: paidTotal,
-        base_paid: 0,
-        status,
-        disbursement_amount: loan.amount,
-        origin: 'nuevo',
-        ...loanFields,
-      })
+          paid_total: paidTotal,
+          base_paid: 0,
+          status,
+          ...loanFields,
+        })
 
         const existing = data.installments
           .filter((item) => item.loan === id)
