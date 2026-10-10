@@ -4,7 +4,6 @@ import { useMemo, useState } from 'react'
 import {
   ArrowDownLeft,
   ArrowUpRight,
-  Banknote,
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
@@ -20,6 +19,7 @@ import { useData, useLookups, useToday } from '@/components/providers'
 import { buildCashEntries, cashSummary, CASH_CATEGORY_LABEL, isRealPayment, loanDisbursed, rangeSummary, type CashEntry } from '@/lib/cash'
 import { dayKey, LOAN_STATUS_LABEL, METHOD_LABEL, moraTotal, todayKey } from '@/lib/derive'
 import { downloadCSV, formatDate, money, toInputDate } from '@/lib/format'
+import { portfolioAtDay } from '@/lib/portfolio'
 import { addDaysKey, formatWeekRange, shiftWeek, weekDayKeys, weekEndKey, WEEKDAY_LABEL, weekStartKey } from '@/lib/week'
 
 const INCOME_CATEGORY = ['pago', 'aporte', 'ajuste', 'otro']
@@ -94,6 +94,9 @@ export default function ClosingsView() {
     const clientsServed = new Set(weekPayments.map((payment) => payment.client)).size
     const activeBalance = loans.reduce((sum, loan) => sum + (Number(loan.balance) || 0), 0)
     const mora = moraTotal(installments, new Date(`${endKey}T12:00:00`))
+    // Cartera (total a cobrar) al inicio de la semana seleccionada y al cierre.
+    const carteraInicial = portfolioAtDay(loans, payments, installments, addDaysKey(startKey, -1)).closing
+    const carteraFinal = portfolioAtDay(loans, payments, installments, endKey).closing
 
     const daily = weekDayKeys(startKey).map((key) => ({
       key,
@@ -104,6 +107,8 @@ export default function ClosingsView() {
     return {
       opening,
       closing,
+      carteraInicial,
+      carteraFinal,
       income,
       expense,
       net,
@@ -160,11 +165,11 @@ export default function ClosingsView() {
       ['Cierre semanal', formatWeekRange(startKey)],
       [],
       ['Concepto', 'Efectivo', 'Cuenta', 'Total'],
-      ['Saldo inicial', report.opening.cash, report.opening.digital, report.opening.total],
+      ['Cartera inicial', '', '', report.carteraInicial],
       ['Entradas', report.income.efectivo, report.income.digital, report.income.total],
       ['Salidas', report.expense.efectivo, report.expense.digital, report.expense.total],
       ['Neto', report.net.efectivo, report.net.digital, report.net.total],
-      ['Saldo final', report.closing.cash, report.closing.digital, report.closing.total],
+      ['Cartera final', '', '', report.carteraFinal],
       [],
       ['Entradas por concepto', 'Efectivo', 'Cuenta', 'Total'],
       ...report.incomeRows.map((row) => [CASH_CATEGORY_LABEL[row.category] || row.category, row.efectivo, row.digital, row.total]),
@@ -281,10 +286,10 @@ export default function ClosingsView() {
           </div>
 
           <div className="stats-grid">
-            <Stat label="Saldo inicial" value={money(report.opening.total)} icon={Banknote} tone="blue" />
+            <Stat label="Cartera inicial" value={money(report.carteraInicial)} icon={WalletCards} tone="blue" />
             <Stat label="Entradas" value={money(report.income.total)} icon={ArrowDownLeft} tone="green" />
             <Stat label="Salidas" value={money(report.expense.total)} icon={ArrowUpRight} tone="red" />
-            <Stat label="Saldo final" value={money(report.closing.total)} icon={CircleDollarSign} tone="amber" />
+            <Stat label="Cartera final" value={money(report.carteraFinal)} icon={WalletCards} tone="amber" />
           </div>
 
           <div className="dash-grid">
